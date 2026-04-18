@@ -4,15 +4,23 @@ Monorepo boilerplate for AI SaaS apps. See [`PRD.md`](./PRD.md) for the full spe
 
 ## Status
 
-Scaffolded so far:
+### Completed
 
-- `backend/` — Python 3.12 project managed by `uv`. Dev deps: `ruff`, `pytest`, `pytest-asyncio`, `httpx`, `pre-commit`.
+- `backend/` — Python 3.12 project managed by `uv`. Full FastAPI app with:
+  - `POST /api/v1/documents` — upload `.md` file, splits into chunks using `MarkdownHeaderTextSplitter` + `CharacterTextSplitter` (500 chars, 50 overlap).
+  - `GET /api/v1/documents/{id}` — returns document with all chunks.
+  - `GET /healthz` — liveness check.
+  - In-memory storage (module-level dict, resets on restart).
+  - `client.py` — CLI script to upload a `.md` file and fetch it back.
+  - Tests: `pytest` + `httpx` ASGI transport, TDD red/green cycle.
 - `frontend/` — Next.js 16 (App Router), React 19, TypeScript 6, Tailwind 4, ESLint 9 (flat config), `src/` dir, `@/*` import alias.
 - `.pre-commit-config.yaml` — on every commit runs: `check-yaml`, `check-json`, `ruff check --fix`, `ruff format`, ESLint (frontend), `pytest` (backend).
 
 > **ESLint pinned to `^9`** — ESLint 10 is incompatible with `eslint-config-next@16.2.4`'s bundled `eslint-plugin-react` (uses a removed internal API). Bump once Next's config ships a fix.
 
-FastAPI app, LangGraph workflow, Supabase integration, shadcn/ui, CI, Docker, etc. are **not** implemented yet — see the PRD for the roadmap.
+### Not yet implemented
+
+LangGraph workflow, Supabase/pgvector integration, PDF ingestion (`docling` + `arq`), LLM providers (`langchain-ollama`, `langchain-openai`, `langchain-anthropic`), chat streaming, shadcn/ui, CI, Docker, observability (`mlflow`), etc. — see the PRD for the roadmap.
 
 ## Prerequisites
 
@@ -37,11 +45,11 @@ uv run --project backend pre-commit install
 
 ### Backend
 
-No FastAPI app yet — the scaffold just has `backend/main.py` with a `main()` function:
-
 ```bash
-uv run --project backend python backend/main.py
+uv run --project backend uvicorn main:app --reload
 ```
+
+Runs at `http://localhost:8000`. See `client.py` for a CLI tool to upload and fetch documents.
 
 ### Frontend
 
@@ -85,7 +93,8 @@ Pre-commit runs automatically on `git commit`. If a hook fails, fix the issue, r
 ├── .pre-commit-config.yaml   # yaml/json/ruff/eslint/pytest hooks
 ├── backend/
 │   ├── pyproject.toml        # uv-managed deps, pytest config
-│   ├── main.py
+│   ├── main.py               # FastAPI app (documents + healthz endpoints)
+│   ├── client.py             # CLI tool to upload/fetch documents
 │   └── tests/                # pytest (asyncio_mode = "auto")
 └── frontend/
     ├── package.json

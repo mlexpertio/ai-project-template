@@ -1,0 +1,113 @@
+# --- OS ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editors / IDEs ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+.zed/
+.cursor/
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.crt
+.secrets/
+
+# --- Python (backend/) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env/
+.eggs/
+*.egg
+*.egg-info/
+build/
+dist/
+pip-wheel-metadata/
+.tox/
+.nox/
+
+# Python tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+*.cover
+
+# Jupyter
+.ipynb_checkpoints/
+
+# --- Node / frontend (frontend/ also has its own) ---
+node_modules/
+.pnpm-store/
+.npm/
+*.tsbuildinfo
+
+# --- Testing artifacts ---
+playwright-report/
+test-results/
+playwright/.cache/
+
+# --- MLflow ---
+mlruns/
+mlartifacts/
+mlflow.db
+
+# --- Supabase CLI ---
+supabase/.branches/
+supabase/.temp/
+
+# --- Docker / local data ---
+.docker/
+docker-volumes/
+
+# --- Logs / temp ---
+*.log
+logs/
+*.pid
+*.seed
+tmp/
+temp/
+
+# --- Pre-commit ---
+.pre-commit-cache/
+
+# --- Claude Code (commit shared config, ignore local overrides) ---
+.claude/settings.local.json

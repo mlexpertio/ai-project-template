@@ -2,64 +2,69 @@
 
 ## 1. Product Overview
 **Name:** MLExpert AI App Starter
-**Purpose:** Decoupled monorepo boilerplate for AI engineers to launch single-user, private/local AI applications. It supports multi-turn agentic chat, Document RAG (Retrieval-Augmented Generation), and long-term memory.
-**Key Constraint:** The system must seamlessly toggle between Local AI (Ollama) for zero-cost development and Cloud AI (Google/OpenAI/Anthropic) for production, requiring zero changes to the core LangGraph logic.
+**Purpose:** Minimal decoupled monorepo boilerplate for AI engineers to launch single-user, private/local AI applications. Multi-turn chat with swappable LLM providers and optional per-thread document context.
+**Key Constraint:** Toggle between Local AI (Ollama) and Cloud AI (OpenAI / Anthropic) via a single env var, with zero changes to core logic.
 
-## 2. Tech Stack Definition
-AI Assistant, you must strictly adhere to this stack. Do not substitute libraries without explicit instruction.
+**Explicit non-goals for v1:** RAG / vector search, persistent storage (no database), background job queues, observability stack, auth / multi-user. These are deferred to follow-up extension guides so the starter stays small and easy to fork.
 
-### Backend (AI & Orchestration)
+## 2. Tech Stack
+Strictly adhere to this stack. Install via the package manager — never pin versions manually; use latest.
+
+### Backend
 *   **Language/Framework:** Python 3.12+, FastAPI
 *   **AI Orchestration:** LangChain Core, LangGraph
 *   **LLM Integration:** `langchain-ollama`, `langchain-openai`, `langchain-anthropic`
-*   **Memory Persistence:** `langgraph-checkpoint-postgres`
-*   **Document Parsing:** `docling`
-*   **Observability:** `mlflow` (`mlflow.langchain.autolog()`) for LLM tracing.
-*   **Background Jobs:** `arq` (Redis-backed) — `fastapi.BackgroundTasks` is insufficient for doc ingestion at scale.
-*   **Migrations:** Supabase CLI (`supabase/migrations/*.sql`) — not a single monolithic `schema.sql`.
+*   **Document Parsing:** `pypdfium2` (small, pure Python — skip `docling` until layout-aware parsing is actually needed)
 *   **Testing:** `pytest`, `pytest-asyncio`, `httpx` (ASGI transport)
 *   **Lint/Format:** `ruff` (check + format)
 *   **Package Manager:** `uv`
 
-### Frontend (UI & Client)
+### Frontend
 *   **Framework:** Next.js 16 (App Router), React 19
-*   **Styling & UI:** Tailwind CSS, shadcn/ui (initialized via `npx shadcn@latest init`), Lucide Icons
-*   **AI Integration:** Vercel AI SDK (`@ai-sdk/react` for `useChat` and parsing SSE)
+*   **Styling & UI:** Tailwind CSS, shadcn/ui (initialized via `npx shadcn@latest init`), Lucide Icons. Ship dark mode as the default — no toggle.
+*   **AI Integration:** Vercel AI SDK (`@ai-sdk/react` for `useChat` and SSE parsing)
 *   **Markdown Parsing:** `react-markdown`, `remark-gfm`, `rehype-highlight` (for `<think>` tags and code blocks)
 *   **Typed API Client:** `openapi-typescript` — codegen TS types from FastAPI's OpenAPI schema to eliminate FE/BE drift.
 *   **Testing:** `vitest` (unit), `@playwright/test` (e2e)
 
-### Infrastructure & State
-*   **Database:** Supabase (PostgreSQL 15+, `pgvector`) — used for persistence and vector search only.
+### Infrastructure
 *   **Deployment:** Docker (multi-stage, non-root user), Docker Compose
 *   **Quality Gates:** `pre-commit` (ruff + pytest on commit), GitHub Actions CI (lint + test on PR)
 
-Always use the package manager to install the dependencies - never assign the version of the library yourself (make use of the latest versions)
-
 ---
 
-## 3. Database Schema (Supabase / PostgreSQL)
-The backend requires the following SQL migrations to be generated and applied.
+## 3. Server-Side State
 
-### 3.1 Extensions
-*   `CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;`
+All state lives in memory on `app.state`. Tradeoffs are explicit and documented:
 
-### 3.2 Tables
-**1. `documents`**
-*   `id` (uuid, primary key)
-*   `filename` (text)
-*   `status` (enum: 'pending', 'processing', 'completed', 'failed')
-*   `created_at` (timestamptz)
+*   **Single uvicorn worker only** — each process has its own dict.
+*   **State is lost on restart.**
+*   Swap to SQLite / Postgres when either tradeoff becomes blocking; that migration is the first extension guide.
 
-**2. `chunks`**
-*   `id` (bigserial, primary key)
-*   `document_id` (uuid, foreign key -> `documents.id` ON DELETE CASCADE)
-*   `content` (text)
-*   `metadata` (jsonb)
-*   `embedding` (vector(N)) *Note: `N` is provider-bound (Qwen3/BGE=1024, OpenAI `text-embedding-3-small`=1536). Fix `N` per deployment — do NOT hardcode in schema; supply via migration variable.*
+```python
+@dataclass
+class Document:
+    id: UUID; filename: str; text: str
+    char_count: int; created_at: datetime
 
-**3. LangGraph Checkpoints**
-*   *Note to AI:* Use the standard schema required by `langgraph-checkpoint-postgres`.
+@dataclass
+class Message:
+    role: Literal["user", "assistant"]; content: str; created_at: datetime
+
+@dataclass
+class Thread:
+    id: UUID; title: str | None
+    attached_docs: list[Document]   # snapshot at creation — not refs
+    messages: list[Message]
+    created_at: datetime; updated_at: datetime
+    lock: asyncio.Lock               # serializes /chat/stream per thread
+
+class AppState:
+    documents: dict[UUID, Document]
+    threads: dict[UUID, Thread]
+```
+
+**Attached documents are snapshotted into the thread at creation.** Deleting a document from the global pool afterwards does not affect existing threads — "locked at the start" really means locked.
 
 ---
 
@@ -67,94 +72,129 @@ The backend requires the following SQL migrations to be generated and applied.
 
 ### 4.1 Global Dependencies
 *   **API Versioning:** All routes under `/api/v1/...` from day one.
-*   **Model Router:** A factory function `get_llm()` that reads the `AI_PROVIDER` env var and returns the instantiated LangChain BaseChatModel.
-*   **Embeddings Router:** A parallel factory `get_embeddings()` — vector dimension is provider-bound and must match the `chunks.embedding` column.
+*   **Model Router:** A factory function `get_llm()` that reads the `AI_PROVIDER` env var and returns the instantiated LangChain `BaseChatModel`.
 *   **Health Endpoint:** `GET /healthz` — simple liveness check.
+*   **OpenAPI:** `GET /openapi.json` is free from FastAPI, consumed by the frontend's `openapi-typescript` codegen.
 
-### 4.2 Core Endpoints
-**1. `POST /api/v1/chat/stream`**
-*   **Input:** JSON containing `messages` (list), `thread_id` (string).
-*   **Process:**
-    1. Invoke the compiled LangGraph workflow using `.astream(stream_mode="messages")`.
-*   **Output:** Server-Sent Events (SSE) compatible with Vercel AI SDK. Emit a terminal SSE `error` event on mid-stream failures.
+### 4.2 Endpoints
 
-**2. `POST /api/v1/documents/upload`**
-*   **Input:** `multipart/form-data` containing a PDF file.
-*   **Validation:** enforce max size (e.g. 20MB), MIME allowlist (`application/pdf`), sanitized filename.
-*   **Process:**
-    1. Save file temporarily.
-    2. Create `documents` row with status `pending`.
-    3. Enqueue an `arq` job to parse via `docling`, chunk, embed, and insert into `chunks`. Update status to `completed` (or `failed`).
-*   **Output:** `{"document_id": "uuid"}`.
+**Ops**
+*   `GET /healthz` → `{ "status": "ok" }`
 
-### 4.3 LangGraph Agentic Workflow
-*   **State:** `TypedDict` containing `messages`, `context` (retrieved docs).
+**Documents** (global pool)
+*   `POST /api/v1/documents` — `multipart/form-data`, single file. Validates MIME (`text/plain`, `text/markdown`, `application/pdf`) and size (≤ 5MB). Extracts text synchronously. → `201 { id, filename, char_count, created_at }`
+*   `GET /api/v1/documents` → `200 [{ id, filename, char_count, created_at }]` (metadata only; no `text` field to keep list responses small)
+*   `DELETE /api/v1/documents/{id}` → `204`
+
+**Threads**
+*   `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`. Validates all IDs exist, caps combined attached text at 100k chars, snapshots doc text into the thread. → `201 { id, created_at, documents: [{ id, filename }] }`
+*   `GET /api/v1/threads` → `200 [{ id, title, created_at, updated_at }]` (sidebar list; no messages)
+*   `GET /api/v1/threads/{id}` → `200 { id, title, created_at, messages, documents: [{ id, filename }] }` (rehydrate chat view)
+*   `DELETE /api/v1/threads/{id}` → `204`
+
+**Chat**
+*   `POST /api/v1/chat/stream` — body `{ thread_id, message }`. Appends the user message, invokes the LangGraph workflow with the thread's `messages` and `attached_docs` in state, streams tokens via SSE (Vercel AI SDK format), and appends the final assistant message when the stream closes. On the first user message in a thread, auto-derives `title` from the first 60 chars. Emits a terminal SSE `error` event on mid-stream failures.
+
+**Error codes**
+*   `400` — unknown `document_ids` at thread creation; combined attached text exceeds cap
+*   `404` — thread or document not found
+*   `413` — upload too large
+*   `415` — unsupported MIME
+*   `422` — malformed body (FastAPI default)
+
+### 4.3 LangGraph Workflow
+Minimal single-node graph, designed to grow:
+*   **State:** `TypedDict` containing `messages`, `attached_docs`.
 *   **Nodes:**
-    *   `router`: Analyzes the last user message. Routes to `retrieve` if document context is needed, or `generate` if not.
-    *   `retrieve`: Embeds the query, hits Supabase `match_chunks` RPC (pgvector), appends to state.
-    *   `generate`: Calls `get_llm().bind_tools()`.
-    *   `tools`: Executes any bound tools (e.g., Web Search, Calculator).
-*   **Memory:** Wrapped with `PostgresSaver(conn_pool)`.
+    *   `generate`: builds a system message from `attached_docs` (concatenated as `--- Context: {filename} ---\n{text}`), then calls `get_llm()`.
+*   **No checkpointer, no router, no tool node in v1.** Add them when you need persistence, conditional routing, or tool use.
+
+### 4.4 Module Layout
+
+```
+backend/app/
+  main.py            # FastAPI app, lifespan sets app.state, mounts routers
+  schemas.py         # Pydantic request/response models
+  state.py           # dataclasses from §3
+  routers/
+    health.py
+    documents.py
+    threads.py
+    chat.py
+  services/
+    llm.py           # get_llm() provider factory
+    parse.py         # extract_text() for txt/md/pdf via pypdf
+    graph.py         # LangGraph build
+    sse.py           # Vercel-AI-SDK-compatible SSE encoder
+```
 
 ---
 
 ## 5. Frontend Architecture (Next.js)
 
-### 5.1 Layouts & Routing
-*   `/` - Main layout. Contains a fixed Sidebar and dynamic Main Content area.
-*   `/chat/[threadId]` - Active conversation view.
-*   `/documents` - Document manager.
+### 5.1 Routes
+*   `/` — redirects to most recent thread; shows an empty-state "new chat" landing if none exist.
+*   `/documents` — upload + list + delete.
+*   `/chat/[threadId]` — chat view.
+
+The sidebar lives in the root layout, shared across routes.
 
 ### 5.2 Core Components
+
 **1. Sidebar (`/components/Sidebar.tsx`)**
-*   Fetches and displays past conversation threads.
-*   Link to Settings.
+*   `+ New Chat` button at the top → routes to an inline "new chat" landing state.
+*   Thread list from `GET /api/v1/threads` (title + relative timestamp).
+*   `Documents` link at the bottom.
 
-**2. Chat Interface (`/app/chat/[threadId]/page.tsx`)**
+**2. New Chat Landing** (inline, not a modal)
+*   Checkbox list of available documents from `GET /api/v1/documents`. Empty state links to `/documents`.
+*   `Start Chat` button → `POST /api/v1/threads` with selected IDs → redirect to `/chat/{id}`.
+*   Skipping selection = plain chat, no attached docs.
+
+**3. Chat Interface (`/app/chat/[threadId]/page.tsx`)**
 *   Implements `useChat` from `@ai-sdk/react` pointing to `${NEXT_PUBLIC_API_URL}/api/v1/chat/stream`.
-*   **Message Renderer:** Must use `react-markdown`. Must support a collapsible UI component for `<think>...</think>` tags to elegantly display reasoning models' internal monologues without cluttering the chat.
+*   Read-only chips in the header show attached doc filenames (signals the locked context; no remove control).
+*   **Message Renderer:** `react-markdown` with collapsible UI for `<think>...</think>` tags and syntax highlighting via `rehype-highlight`.
 
-**3. Document Manager (`/app/documents/page.tsx`)**
-*   Drag-and-drop zone using `react-dropzone`.
-*   A data table displaying uploaded documents and their ingestion status (`pending`, `completed`).
-*   A "Delete" button that triggers backend deletion.
+**4. Documents Page (`/app/documents/page.tsx`)**
+*   `<input type="file">` (no `react-dropzone` — one less dep).
+*   Table: filename, size, date, delete button.
+
+### 5.3 Deliberately Absent from v1
+Thread rename / search / pin / archive, settings page, provider-switch UI, dark-mode toggle, collapsible sidebar, toast notifications (use inline errors), drag-and-drop upload, multi-file upload, upload progress bars.
 
 ---
 
 ## 6. Developer Experience
 
 ### 6.1 Docker Compose (`docker-compose.yml`)
-The root directory must contain a docker-compose file that orchestrates the local dev environment:
-1.  `frontend`: Next.js development server (Port 3000).
-2.  `backend`: FastAPI server with hot-reloading (Port 8000).
-3.  `mlflow`: MLflow tracking server (Port 5000).
-4.  `redis`: Broker for `arq` job queue (Port 6379).
-5.  `ollama`: (Optional profile) Local Ollama container with volume mapping for model weights.
+Two services by default; Ollama is an optional profile so forkers who use cloud providers don't pay its cost:
+1.  `frontend` — Next.js dev server (port 3000).
+2.  `backend` — FastAPI with hot-reload (port 8000).
+3.  `ollama` — (profile: `local`) Ollama container with a volume for model weights (port 11434).
 
 Each service has a dedicated multi-stage `Dockerfile` (build → slim runtime, non-root user).
 
 ### 6.2 Environment Variables (`.env.example`)
 ```env
 # Backend
-AI_PROVIDER=ollama # or openai, anthropic
+AI_PROVIDER=ollama          # or openai, anthropic
 OLLAMA_BASE_URL=http://localhost:11434
 OPENAI_API_KEY=sk-...
-SUPABASE_URL=http://localhost:54321
-SUPABASE_SERVICE_ROLE_KEY=ey...
-MLFLOW_TRACKING_URI=http://localhost:5000
+ANTHROPIC_API_KEY=sk-ant-...
 
 # Frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ### 6.3 Quality Gates
-*   **`pre-commit`** config at repo root runs `ruff check --fix`, `ruff format`, and `pytest` on every commit. Install via `uv run --project backend pre-commit install`.
-*   **GitHub Actions CI:** single workflow on PR — runs backend (`ruff`, `pytest`) and frontend (`biome`/`eslint`, `vitest`, `tsc --noEmit`) in parallel jobs.
+*   **`pre-commit`** at repo root runs `ruff check --fix`, `ruff format`, and `pytest` on every commit. Install via `uv run --project backend pre-commit install`.
+*   **GitHub Actions CI:** single workflow on PR — runs backend (`ruff`, `pytest`) and frontend (`eslint`, `vitest`, `tsc --noEmit`) in parallel jobs.
 *   **Type sharing:** backend exports OpenAPI at `/openapi.json`; frontend runs `openapi-typescript` in `postinstall` / CI to generate typed fetch clients.
 
 ---
 
-## 7. AI Implementation Instructions (How to Build This)
+## 7. AI Implementation Instructions
 
 **Development discipline — red/green TDD is mandatory.** Every unit of behavior (API endpoint, LangGraph node, React component with logic, utility) must be built in this cycle:
 1.  **Red:** write a failing test that expresses the desired behavior. Run it and confirm it fails for the right reason (not a syntax/import error).
@@ -163,11 +203,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 Do not write production code ahead of a failing test. Do not batch tests after the fact. Commit in red/green increments so the history reflects the cycle. Use `pytest` for the backend and `vitest` for frontend units; reserve `@playwright/test` for end-to-end flows once the unit layer is green.
 
-AI Assistant, when executing this PRD, follow this strict sequence (each step applied via the TDD cycle above):
-1.  **Initialize the Monorepo:** Create `/frontend` and `/backend` directories. Set up `uv` in the backend and `npx create-next-app@latest` in the frontend.
-2.  **Generate Database Schema:** Output the Supabase migration(s) including the `pgvector` extension and the tables defined in §3.
-3.  **Build the Backend Core:** Implement `server.py`, the LangGraph workflow (`agent.py`), and the Supabase database connector.
-4.  **Build the Frontend Core:** Scaffold the shadcn/ui layout and implement the `useChat` interface.
-5.  **Wire the Stream:** Ensure the FastAPI SSE output perfectly matches the format expected by the Vercel AI SDK.
+**Build sequence (each step applied via the TDD cycle above):**
+1.  **Initialize the Monorepo:** Create `/frontend` and `/backend`. `uv init backend`, `npx create-next-app@latest frontend`.
+2.  **Backend core:** `app.state` dataclasses, `get_llm()` factory, single-node LangGraph, routers in order: `health` → `documents` → `threads` → `chat`.
+3.  **Frontend core:** `shadcn@latest init`, root layout with sidebar, `/documents`, `/chat/[threadId]` with `useChat`.
+4.  **Wire the stream:** Ensure the FastAPI SSE output exactly matches the format expected by the Vercel AI SDK.
+5.  **Type sharing:** generate client types from `/openapi.json` and consume them in the frontend fetchers.
 
-**Do not add extraneous features until this core loop is fully functional and type-safe.**
+**Do not add features beyond §4 and §5 until this core loop is fully functional and type-safe.**

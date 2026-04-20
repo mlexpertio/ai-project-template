@@ -1,26 +1,6 @@
 # MLExpert AI App Starter
 
-Monorepo boilerplate for AI SaaS apps. See [`PRD.md`](./PRD.md) for the full spec.
-
-## Status
-
-### Completed
-
-- `backend/` — Python 3.12 project managed by `uv`. Full FastAPI app with:
-  - `POST /api/v1/documents` — upload `.md` file, splits into chunks using `MarkdownHeaderTextSplitter` + `CharacterTextSplitter` (500 chars, 50 overlap).
-  - `GET /api/v1/documents/{id}` — returns document with all chunks.
-  - `GET /healthz` — liveness check.
-  - In-memory storage (module-level dict, resets on restart).
-  - `client.py` — CLI script to upload a `.md` file and fetch it back.
-  - Tests: `pytest` + `httpx` ASGI transport, TDD red/green cycle.
-- `frontend/` — Next.js 16 (App Router), React 19, TypeScript 6, Tailwind 4, ESLint 9 (flat config), `src/` dir, `@/*` import alias.
-- `.pre-commit-config.yaml` — on every commit runs: `check-yaml`, `check-json`, `ruff check --fix`, `ruff format`, ESLint (frontend), `pytest` (backend).
-
-> **ESLint pinned to `^9`** — ESLint 10 is incompatible with `eslint-config-next@16.2.4`'s bundled `eslint-plugin-react` (uses a removed internal API). Bump once Next's config ships a fix.
-
-### Not yet implemented
-
-LangGraph workflow, Supabase/pgvector integration, PDF ingestion (`docling` + `arq`), LLM providers (`langchain-ollama`, `langchain-openai`, `langchain-anthropic`), chat streaming, shadcn/ui, CI, Docker, observability (`mlflow`), etc. — see the PRD for the roadmap.
+Monorepo boilerplate for AI SaaS apps. See [`PRD.md`](./PRD.md) for the full spec and [`TODO.md`](./TODO.md) for progress.
 
 ## Prerequisites
 
@@ -89,6 +69,7 @@ Pre-commit runs automatically on `git commit`. If a hook fails, fix the issue, r
 ```
 .
 ├── PRD.md                    # Product requirements
+├── TODO.md                   # Progress tracker
 ├── README.md                 # You are here
 ├── .pre-commit-config.yaml   # yaml/json/ruff/eslint/pytest hooks
 ├── backend/

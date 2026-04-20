@@ -31,7 +31,6 @@ The current `POST /api/v1/documents` splits uploads into chunks (RAG-oriented). 
 
 - [ ] Move in-memory storage from module-level dict into `app.state` with typed dataclasses (`Document`, `Message`, `Thread`, `AppState`) per PRD §3
 - [ ] Snapshot document text into threads at creation (not references) — deletion of a doc must not affect existing threads
-- [ ] Add `asyncio.Lock` per thread to serialize `/chat/stream` calls per thread
 - [ ] Split `main.py` into `schemas.py`, `state.py`, `routers/{health,documents,threads,chat}.py`, `services/{llm,parse,graph,sse}.py` per PRD §4.4
 - [ ] `.env.example` at repo root: `AI_PROVIDER`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_API_URL`
 

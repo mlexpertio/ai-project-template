@@ -39,6 +39,7 @@ All state lives in memory on `app.state`. Tradeoffs are explicit and documented:
 
 *   **Single uvicorn worker only** — each process has its own dict.
 *   **State is lost on restart.**
+*   **Single in-flight stream per thread is a client-side invariant.** `useChat` disables send while streaming; the backend does not guard against concurrent `/chat/stream` calls on the same thread.
 *   Swap to SQLite / Postgres when either tradeoff becomes blocking; that migration is the first extension guide.
 
 ```python
@@ -57,7 +58,6 @@ class Thread:
     attached_docs: list[Document]   # snapshot at creation — not refs
     messages: list[Message]
     created_at: datetime; updated_at: datetime
-    lock: asyncio.Lock               # serializes /chat/stream per thread
 
 class AppState:
     documents: dict[UUID, Document]

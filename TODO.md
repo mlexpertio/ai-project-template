@@ -11,21 +11,15 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 - [x] Backend: `client.py` CLI for upload/fetch smoke testing
 - [x] Backend: `pytest` + `httpx` ASGI transport, red/green TDD cycle
 - [x] Pre-commit hooks: `check-yaml`, `check-json`, `ruff check --fix`, `ruff format`, frontend ESLint, backend `pytest`
+- [x] Cleanup: removed chunking (`MarkdownHeaderTextSplitter` + `CharacterTextSplitter`); replaced with plain-text extraction (`.txt`/`.md` as UTF-8, `.pdf` via `pypdfium2`)
+- [x] Cleanup: added MIME validation (`text/plain`, `text/markdown`, `application/pdf`) → `415` on mismatch
+- [x] Cleanup: added size validation (≤ 5 MB) → `413` on overflow
+- [x] Cleanup: replaced `GET /api/v1/documents/{id}` with `GET /api/v1/documents` metadata-only list (`id`, `filename`, `char_count`, `created_at`)
+- [x] Cleanup: added `DELETE /api/v1/documents/{id}` → `204`
 
 > **Known constraint:** ESLint pinned to `^9` — ESLint 10 is incompatible with `eslint-config-next@16.2.4`'s bundled `eslint-plugin-react` (uses a removed internal API). Bump once Next's config ships a fix.
 
 ---
-
-## Cleanup (current implementation diverges from revised PRD)
-
-The current `POST /api/v1/documents` splits uploads into chunks (RAG-oriented). The revised PRD stores plain text for inline context injection — no chunking, no vector search.
-
-- [ ] Remove `MarkdownHeaderTextSplitter` + `CharacterTextSplitter` chunking from the documents endpoint
-- [ ] Replace with plain-text extraction: read `.txt` / `.md` as UTF-8; extract `.pdf` via `pypdfium2`
-- [ ] Add MIME validation (`text/plain`, `text/markdown`, `application/pdf`) → `415` on mismatch
-- [ ] Add size validation (≤ 5 MB) → `413` on overflow
-- [ ] Replace `GET /api/v1/documents/{id}` with `GET /api/v1/documents` list (metadata-only: `id`, `filename`, `char_count`, `created_at`)
-- [ ] Add `DELETE /api/v1/documents/{id}` → `204`
 
 ## Backend — state & module layout
 

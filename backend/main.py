@@ -1,11 +1,16 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, UploadFile
-from fastapi.responses import JSONResponse
-from langchain_text_splitters import CharacterTextSplitter, MarkdownHeaderTextSplitter
+import pypdfium2 as pdfium
+from fastapi import FastAPI, HTTPException, UploadFile
+from starlette.responses import Response
 
 app = FastAPI()
+
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_MIME_TYPES = {"text/plain", "text/markdown", "application/pdf"}
+
+documents: dict[str, dict] = {}
 
 
 @app.get("/healthz")
@@ -13,66 +18,66 @@ async def healthz():
     return {"status": "ok"}
 
 
-documents: dict[str, dict] = {}
-
-HEADERS_TO_SPLIT_ON = [
-    ("#", "Header"),
-    ("##", "SubHeader"),
-    ("###", "SubSubHeader"),
-]
-
-
-def _chunk_text(text: str) -> list[dict]:
-    markdown_splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=HEADERS_TO_SPLIT_ON,
-        strip_headers=False,
-    )
-    md_chunks = markdown_splitter.split_text(text)
-
-    char_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=500,
-        chunk_overlap=50,
-        length_function=len,
-    )
-
-    chunks: list[dict] = []
-    index = 0
-    for doc in md_chunks:
-        sub_chunks = char_splitter.split_text(doc.page_content)
-        for sub in sub_chunks:
-            chunks.append({"index": index, "content": sub})
-            index += 1
-    return chunks
+def _extract_text(content: bytes, content_type: str) -> str:
+    if content_type == "application/pdf":
+        pdf = pdfium.PdfDocument(content)
+        texts: list[str] = []
+        for page in pdf:
+            textpage = page.get_textpage()
+            texts.append(textpage.get_text_bounded())
+            textpage.close()
+            page.close()
+        pdf.close()
+        return "\n".join(texts)
+    return content.decode("utf-8")
 
 
-@app.post("/api/v1/documents")
+@app.post("/api/v1/documents", status_code=201)
 async def upload_document(file: UploadFile):
-    if not file.filename or not file.filename.endswith(".md"):
-        return JSONResponse(
-            status_code=400, content={"detail": "Only .md files accepted"}
-        )
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported media type")
 
     content = await file.read()
-    text = content.decode("utf-8")
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large")
+
+    text = _extract_text(content, content_type)
     doc_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc)
 
-    chunks = _chunk_text(text)
-
     documents[doc_id] = {
         "id": doc_id,
-        "filename": file.filename,
+        "filename": file.filename or "untitled",
+        "text": text,
+        "char_count": len(text),
         "created_at": created_at.isoformat(),
-        "chunks": chunks,
     }
 
-    return {"id": doc_id, "filename": file.filename}
+    return {
+        "id": doc_id,
+        "filename": file.filename or "untitled",
+        "char_count": len(text),
+        "created_at": created_at.isoformat(),
+    }
 
 
-@app.get("/api/v1/documents/{doc_id}")
-async def get_document(doc_id: str):
-    doc = documents.get(doc_id)
-    if doc is None:
-        return JSONResponse(status_code=404, content={"detail": "Document not found"})
-    return doc
+@app.get("/api/v1/documents")
+async def list_documents():
+    return [
+        {
+            "id": doc["id"],
+            "filename": doc["filename"],
+            "char_count": doc["char_count"],
+            "created_at": doc["created_at"],
+        }
+        for doc in documents.values()
+    ]
+
+
+@app.delete("/api/v1/documents/{doc_id}", status_code=204)
+async def delete_document(doc_id: str):
+    if doc_id not in documents:
+        raise HTTPException(status_code=404, detail="Document not found")
+    del documents[doc_id]
+    return Response(status_code=204)

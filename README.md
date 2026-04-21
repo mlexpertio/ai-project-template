@@ -29,7 +29,13 @@ uv run --project backend pre-commit install
 uv run --project backend uvicorn main:app --reload
 ```
 
-Runs at `http://localhost:8000`. See `client.py` for a CLI tool to upload and fetch documents.
+Runs at `http://localhost:8000`. See `client.py` for a CLI tool to upload, list, and delete documents:
+
+```bash
+uv run --project backend python client.py upload file.txt
+uv run --project backend python client.py list
+uv run --project backend python client.py delete <doc-id>
+```
 
 ### Frontend
 

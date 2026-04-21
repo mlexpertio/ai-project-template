@@ -72,7 +72,8 @@ class AppState:
 
 ### 4.1 Global Dependencies
 *   **API Versioning:** All routes under `/api/v1/...` from day one.
-*   **Model Router:** A factory function `get_llm()` that reads the `AI_PROVIDER` env var and returns the instantiated LangChain `BaseChatModel`.
+*   **Model Router:** A factory function `get_llm()` that reads `AI_PROVIDER` and `MODEL_NAME` env vars and returns the instantiated LangChain `BaseChatModel`. `AI_PROVIDER` alone is insufficient — `MODEL_NAME` picks the actual model (e.g. `llama3.2`, `gpt-4o-mini`, `claude-haiku-4-5`).
+*   **CORS:** `CORSMiddleware` configured from a `CORS_ORIGINS` env var (comma-separated). Default includes `http://localhost:3000` (Next.js dev) and `http://frontend:3000` (Docker Compose network). Without this, the clone-and-run flow is broken on first try.
 *   **Health Endpoint:** `GET /healthz` — simple liveness check.
 *   **OpenAPI:** `GET /openapi.json` is free from FastAPI, consumed by the frontend's `openapi-typescript` codegen.
 
@@ -87,7 +88,7 @@ class AppState:
 *   `DELETE /api/v1/documents/{id}` → `204`
 
 **Threads**
-*   `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`. Validates all IDs exist, caps combined attached text at 100k chars, snapshots doc text into the thread. → `201 { id, created_at, documents: [{ id, filename }] }`
+*   `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`. Validates all IDs exist, caps combined attached text at `MAX_CONTEXT_CHARS` (default `25_000`, ~6k tokens at ~4 chars/token — leaves headroom for chat history on a local 7B model), snapshots doc text into the thread. → `201 { id, created_at, documents: [{ id, filename }] }`
 *   `GET /api/v1/threads` → `200 [{ id, title, created_at, updated_at }]` (sidebar list; no messages)
 *   `GET /api/v1/threads/{id}` → `200 { id, title, created_at, messages, documents: [{ id, filename }] }` (rehydrate chat view)
 *   `DELETE /api/v1/threads/{id}` → `204`
@@ -96,7 +97,7 @@ class AppState:
 *   `POST /api/v1/chat/stream` — body `{ thread_id, message }`. Appends the user message, invokes the LangGraph workflow with the thread's `messages` and `attached_docs` in state, streams tokens via SSE (Vercel AI SDK format), and appends the final assistant message when the stream closes. On the first user message in a thread, auto-derives `title` from the first 60 chars. Emits a terminal SSE `error` event on mid-stream failures.
 
 **Error codes**
-*   `400` — unknown `document_ids` at thread creation; combined attached text exceeds cap
+*   `400` — unknown `document_ids` at thread creation; combined attached text exceeds `MAX_CONTEXT_CHARS`
 *   `404` — thread or document not found
 *   `413` — upload too large
 *   `415` — unsupported MIME
@@ -179,9 +180,12 @@ Each service has a dedicated multi-stage `Dockerfile` (build → slim runtime, n
 ```env
 # Backend
 AI_PROVIDER=ollama          # or openai, anthropic
+MODEL_NAME=llama3.2         # provider-specific model id (e.g. gpt-4o-mini, claude-haiku-4-5)
 OLLAMA_BASE_URL=http://localhost:11434
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
+CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+MAX_CONTEXT_CHARS=25000     # combined attached doc text cap (~6k tokens)
 
 # Frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000

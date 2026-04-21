@@ -32,18 +32,20 @@ The current `POST /api/v1/documents` splits uploads into chunks (RAG-oriented). 
 - [ ] Move in-memory storage from module-level dict into `app.state` with typed dataclasses (`Document`, `Message`, `Thread`, `AppState`) per PRD §3
 - [ ] Snapshot document text into threads at creation (not references) — deletion of a doc must not affect existing threads
 - [ ] Split `main.py` into `schemas.py`, `state.py`, `routers/{health,documents,threads,chat}.py`, `services/{llm,parse,graph,sse}.py` per PRD §4.4
-- [ ] `.env.example` at repo root: `AI_PROVIDER`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_API_URL`
+- [ ] `app/core/config.py` — env-driven settings: `AI_PROVIDER`, `MODEL_NAME`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CORS_ORIGINS`, `MAX_CONTEXT_CHARS`
+- [ ] Mount `CORSMiddleware` in `main.py` reading `CORS_ORIGINS` (default `http://localhost:3000,http://frontend:3000`) — unblocks clone-and-run against the Next.js dev server
+- [ ] `.env.example` at repo root: `AI_PROVIDER`, `MODEL_NAME`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CORS_ORIGINS`, `MAX_CONTEXT_CHARS`, `NEXT_PUBLIC_API_URL`
 
 ## Backend — LLM & LangGraph
 
-- [ ] `services/llm.py` — `get_llm()` factory reading `AI_PROVIDER` env var; wire `langchain-ollama`, `langchain-openai`, `langchain-anthropic`
+- [ ] `services/llm.py` — `get_llm()` factory reading `AI_PROVIDER` + `MODEL_NAME` env vars; wire `langchain-ollama`, `langchain-openai`, `langchain-anthropic` (model id is required — no silent default per provider)
 - [ ] `services/parse.py` — `extract_text()` for txt / md / pdf
 - [ ] `services/graph.py` — LangGraph single-node graph with `TypedDict` state (`messages`, `attached_docs`); `generate` node builds system message from `attached_docs` (`--- Context: {filename} ---\n{text}`) and calls `get_llm()`
 - [ ] `services/sse.py` — SSE encoder compatible with Vercel AI SDK
 
 ## Backend — threads endpoints
 
-- [ ] `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`; validate IDs exist (`400`); cap combined attached text at 100 k chars (`400`); snapshot doc text into thread → `201 { id, created_at, documents: [{id, filename}] }`
+- [ ] `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`; validate IDs exist (`400`); cap combined attached text at `MAX_CONTEXT_CHARS` (default `25_000`, ~6k tokens — fits local 7B models with headroom for chat history) (`400`); snapshot doc text into thread → `201 { id, created_at, documents: [{id, filename}] }`
 - [ ] `GET /api/v1/threads` → `200 [{ id, title, created_at, updated_at }]`
 - [ ] `GET /api/v1/threads/{id}` → `200 { id, title, created_at, messages, documents: [{id, filename}] }`
 - [ ] `DELETE /api/v1/threads/{id}` → `204`

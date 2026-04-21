@@ -2,15 +2,16 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from uuid import uuid4
 
-from main import app, documents
+from app.main import app
 
 
 @pytest.fixture(autouse=True)
-def clear_documents():
-    """Reset the in-memory documents store before each test."""
-    documents.clear()
+def clear_store():
+    app.state.store.documents.clear()
+    app.state.store.threads.clear()
     yield
-    documents.clear()
+    app.state.store.documents.clear()
+    app.state.store.threads.clear()
 
 
 @pytest.fixture

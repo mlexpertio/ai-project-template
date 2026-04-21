@@ -16,6 +16,11 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 - [x] Cleanup: added size validation (≤ 5 MB) → `413` on overflow
 - [x] Cleanup: replaced `GET /api/v1/documents/{id}` with `GET /api/v1/documents` metadata-only list (`id`, `filename`, `char_count`, `created_at`)
 - [x] Cleanup: added `DELETE /api/v1/documents/{id}` → `204`
+- [x] Move in-memory storage from module-level dict into `app.state` with typed dataclasses (`Document`, `Message`, `Thread`, `AppState`) per PRD §3
+- [x] Split `main.py` into `schemas.py`, `state.py`, `routers/{health,documents,threads,chat}.py`, `services/{llm,parse,graph,sse}.py` per PRD §4.4
+- [x] `app/core/config.py` — env-driven settings: `AI_PROVIDER`, `MODEL_NAME`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CORS_ORIGINS`, `MAX_CONTEXT_CHARS`
+- [x] Mount `CORSMiddleware` in `main.py` reading `CORS_ORIGINS` (default `http://localhost:3000,http://frontend:3000`)
+- [x] `.env.example` at repo root with all required env vars
 
 > **Known constraint:** ESLint pinned to `^9` — ESLint 10 is incompatible with `eslint-config-next@16.2.4`'s bundled `eslint-plugin-react` (uses a removed internal API). Bump once Next's config ships a fix.
 
@@ -23,17 +28,14 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 
 ## Backend — state & module layout
 
-- [ ] Move in-memory storage from module-level dict into `app.state` with typed dataclasses (`Document`, `Message`, `Thread`, `AppState`) per PRD §3
 - [ ] Snapshot document text into threads at creation (not references) — deletion of a doc must not affect existing threads
-- [ ] Split `main.py` into `schemas.py`, `state.py`, `routers/{health,documents,threads,chat}.py`, `services/{llm,parse,graph,sse}.py` per PRD §4.4
-- [ ] `app/core/config.py` — env-driven settings: `AI_PROVIDER`, `MODEL_NAME`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CORS_ORIGINS`, `MAX_CONTEXT_CHARS`
-- [ ] Mount `CORSMiddleware` in `main.py` reading `CORS_ORIGINS` (default `http://localhost:3000,http://frontend:3000`) — unblocks clone-and-run against the Next.js dev server
-- [ ] `.env.example` at repo root: `AI_PROVIDER`, `MODEL_NAME`, `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CORS_ORIGINS`, `MAX_CONTEXT_CHARS`, `NEXT_PUBLIC_API_URL`
+
+> *Note: `Thread.attached_docs` is a `list[Document]` designed for snapshots. Deep-copying will happen in the `POST /api/v1/threads` endpoint (next iteration). The dataclass test validates this contract.*
 
 ## Backend — LLM & LangGraph
 
+- [x] `services/parse.py` — `extract_text()` for txt / md / pdf
 - [ ] `services/llm.py` — `get_llm()` factory reading `AI_PROVIDER` + `MODEL_NAME` env vars; wire `langchain-ollama`, `langchain-openai`, `langchain-anthropic` (model id is required — no silent default per provider)
-- [ ] `services/parse.py` — `extract_text()` for txt / md / pdf
 - [ ] `services/graph.py` — LangGraph single-node graph with `TypedDict` state (`messages`, `attached_docs`); `generate` node builds system message from `attached_docs` (`--- Context: {filename} ---\n{text}`) and calls `get_llm()`
 - [ ] `services/sse.py` — SSE encoder compatible with Vercel AI SDK
 

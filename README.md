@@ -26,7 +26,7 @@ uv run --project backend pre-commit install
 ### Backend
 
 ```bash
-uv run --project backend uvicorn main:app --reload
+uv run --project backend uvicorn app.main:app --reload --app-dir backend
 ```
 
 Runs at `http://localhost:8000`. See `client.py` for a CLI tool to upload, list, and delete documents:
@@ -77,11 +77,27 @@ Pre-commit runs automatically on `git commit`. If a hook fails, fix the issue, r
 ├── PRD.md                    # Product requirements
 ├── TODO.md                   # Progress tracker
 ├── README.md                 # You are here
+├── .env.example              # Environment variables template
 ├── .pre-commit-config.yaml   # yaml/json/ruff/eslint/pytest hooks
 ├── backend/
 │   ├── pyproject.toml        # uv-managed deps, pytest config
-│   ├── main.py               # FastAPI app (documents + healthz endpoints)
-│   ├── client.py             # CLI tool to upload/fetch documents
+│   ├── client.py             # CLI tool to upload/list/delete documents
+│   ├── app/
+│   │   ├── main.py           # FastAPI app, CORS, router mounts
+│   │   ├── schemas.py        # Pydantic request/response models
+│   │   ├── state.py          # In-memory dataclasses (Document, Thread, etc.)
+│   │   ├── core/
+│   │   │   └── config.py     # Env-driven settings
+│   │   ├── routers/
+│   │   │   ├── health.py     # GET /healthz
+│   │   │   ├── documents.py  # Upload, list, delete documents
+│   │   │   ├── threads.py    # (next iteration)
+│   │   │   └── chat.py       # (next iteration)
+│   │   └── services/
+│   │       ├── parse.py      # Text extraction (txt/md/pdf)
+│   │       ├── llm.py        # (next iteration)
+│   │       ├── graph.py      # (next iteration)
+│   │       └── sse.py        # (next iteration)
 │   └── tests/                # pytest (asyncio_mode = "auto")
 └── frontend/
     ├── package.json

@@ -28,27 +28,25 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 
 ## Backend — state & module layout
 
-- [ ] Snapshot document text into threads at creation (not references) — deletion of a doc must not affect existing threads
-
-> *Note: `Thread.attached_docs` is a `list[Document]` designed for snapshots. Deep-copying will happen in the `POST /api/v1/threads` endpoint (next iteration). The dataclass test validates this contract.*
+- [x] Snapshot document text into threads at creation (deep-copy via `copy.deepcopy`) — deletion of a doc does not affect existing threads
 
 ## Backend — LLM & LangGraph
 
 - [x] `services/parse.py` — `extract_text()` for txt / md / pdf
-- [ ] `services/llm.py` — `get_llm()` factory reading `AI_PROVIDER` + `MODEL_NAME` env vars; wire `langchain-ollama`, `langchain-openai`, `langchain-anthropic` (model id is required — no silent default per provider)
-- [ ] `services/graph.py` — LangGraph single-node graph with `TypedDict` state (`messages`, `attached_docs`); `generate` node builds system message from `attached_docs` (`--- Context: {filename} ---\n{text}`) and calls `get_llm()`
-- [ ] `services/sse.py` — SSE encoder compatible with Vercel AI SDK
+- [x] `services/llm.py` — `get_llm()` factory reading `AI_PROVIDER` + `MODEL_NAME` env vars; wires `langchain-ollama`, `langchain-openai`, `langchain-anthropic`
+- [x] `services/graph.py` — LangGraph single-node graph with `TypedDict` state (`messages`, `attached_docs`); `generate` node builds system message from `attached_docs` (`--- Context: {filename} ---\n{text}`) and calls `get_llm()`
+- [x] `services/sse.py` — Vercel AI SDK data-stream encoder (`0:<text>`, `3:<error>`, `d`)
 
 ## Backend — threads endpoints
 
-- [ ] `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`; validate IDs exist (`400`); cap combined attached text at `MAX_CONTEXT_CHARS` (default `25_000`, ~6k tokens — fits local 7B models with headroom for chat history) (`400`); snapshot doc text into thread → `201 { id, created_at, documents: [{id, filename}] }`
-- [ ] `GET /api/v1/threads` → `200 [{ id, title, created_at, updated_at }]`
-- [ ] `GET /api/v1/threads/{id}` → `200 { id, title, created_at, messages, documents: [{id, filename}] }`
-- [ ] `DELETE /api/v1/threads/{id}` → `204`
+- [x] `POST /api/v1/threads` — body `{ document_ids?: UUID[] }`; validate IDs exist (`400`); cap combined attached text at `MAX_CONTEXT_CHARS` (`400`); snapshot doc text into thread → `201 { id, created_at, documents: [{id, filename}] }`
+- [x] `GET /api/v1/threads` → `200 [{ id, title, created_at, updated_at }]`
+- [x] `GET /api/v1/threads/{id}` → `200 { id, title, created_at, messages, documents: [{id, filename}] }`
+- [x] `DELETE /api/v1/threads/{id}` → `204`
 
 ## Backend — chat streaming
 
-- [ ] `POST /api/v1/chat/stream` — body `{ thread_id, message }`; append user message; invoke LangGraph with thread state; stream tokens via SSE (Vercel AI SDK format); append final assistant message on close; auto-derive `title` from first 60 chars on first user message; emit terminal SSE `error` on mid-stream failure
+- [x] `POST /api/v1/chat/stream` — body `{ thread_id, message }`; append user message; stream tokens via data-stream format (Vercel AI SDK); append final assistant message on close; auto-derive `title` from first 60 chars on first user message; emit terminal `error` event on mid-stream failure
 
 ## Frontend — foundation
 

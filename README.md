@@ -29,7 +29,23 @@ uv run --project backend pre-commit install
 uv run --project backend uvicorn app.main:app --reload --app-dir backend
 ```
 
-Runs at `http://localhost:8000`. See `client.py` for a CLI tool to upload, list, and delete documents:
+Runs at `http://localhost:8000`.
+
+**Backend API**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/healthz` | Liveness check |
+| POST | `/api/v1/documents` | Upload a `.txt`, `.md`, or `.pdf` (≤ 5 MB) |
+| GET | `/api/v1/documents` | List uploaded documents (metadata only) |
+| DELETE | `/api/v1/documents/{id}` | Remove a document |
+| POST | `/api/v1/threads` | Create a thread (optionally attach documents) |
+| GET | `/api/v1/threads` | List threads |
+| GET | `/api/v1/threads/{id}` | Get thread with messages |
+| DELETE | `/api/v1/threads/{id}` | Delete a thread |
+| POST | `/api/v1/chat/stream` | Stream chat response (Vercel AI SDK data-stream format) |
+
+See `client.py` for a CLI tool to upload, list, and delete documents:
 
 ```bash
 uv run --project backend python client.py upload file.txt
@@ -70,6 +86,14 @@ npm --prefix frontend run typecheck
 
 Pre-commit runs automatically on `git commit`. If a hook fails, fix the issue, re-stage, and commit again.
 
+### Environment variables
+
+Copy `.env.example` to `.env` and fill in your keys. `AI_PROVIDER` + `MODEL_NAME` control which LLM is used (`ollama`, `openai`, or `anthropic`).
+
+### API types for the frontend
+
+The backend exposes an OpenAPI schema at `http://localhost:8000/openapi.json`. The frontend can generate typed clients from it using `openapi-typescript`.
+
 ## Layout
 
 ```
@@ -91,13 +115,13 @@ Pre-commit runs automatically on `git commit`. If a hook fails, fix the issue, r
 │   │   ├── routers/
 │   │   │   ├── health.py     # GET /healthz
 │   │   │   ├── documents.py  # Upload, list, delete documents
-│   │   │   ├── threads.py    # (next iteration)
-│   │   │   └── chat.py       # (next iteration)
+│   │   │   ├── threads.py    # Create, list, get, delete threads
+│   │   │   └── chat.py       # Streaming chat endpoint
 │   │   └── services/
 │   │       ├── parse.py      # Text extraction (txt/md/pdf)
-│   │       ├── llm.py        # (next iteration)
-│   │       ├── graph.py      # (next iteration)
-│   │       └── sse.py        # (next iteration)
+│   │       ├── llm.py        # get_llm() provider factory
+│   │       ├── graph.py      # LangGraph single-node workflow
+│   │       └── sse.py        # Vercel AI SDK data-stream encoder
 │   └── tests/                # pytest (asyncio_mode = "auto")
 └── frontend/
     ├── package.json

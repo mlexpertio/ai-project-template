@@ -1,3 +1,4 @@
+from importlib.resources import files
 from typing import TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
@@ -6,6 +7,8 @@ from langgraph.graph import END, START, StateGraph
 
 from app.services.llm import get_llm
 from app.state import Document
+
+SYSTEM_PROMPT = (files("app") / "prompts" / "system.md").read_text()
 
 
 class GraphState(TypedDict):
@@ -17,14 +20,10 @@ async def generate(state: GraphState):
     messages = state["messages"]
     docs = state.get("attached_docs", [])
 
-    system_parts: list[str] = []
+    system_parts = [SYSTEM_PROMPT]
     for doc in docs:
         system_parts.append(f"--- Context: {doc.filename} ---\n{doc.text}")
-
-    if system_parts:
-        llm_messages = [SystemMessage(content="\n\n".join(system_parts))] + messages
-    else:
-        llm_messages = messages
+    llm_messages = [SystemMessage(content="\n\n".join(system_parts))] + messages
 
     writer = get_stream_writer()
     llm = get_llm()

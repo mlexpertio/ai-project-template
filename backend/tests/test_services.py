@@ -83,9 +83,10 @@ class TestGraph:
                 pieces.append(piece)
 
         assert "".join(pieces) == "Hello! "
-        # No docs means no SystemMessage prepended
+        # System prompt is always prepended, even with no docs
         passed = mock_llm.astream_calls[0]
-        assert not any(isinstance(m, SystemMessage) for m in passed)
+        assert isinstance(passed[0], SystemMessage)
+        assert "helpful ai assistant" in passed[0].content.lower()
 
     @pytest.mark.asyncio
     async def test_graph_with_docs(self):

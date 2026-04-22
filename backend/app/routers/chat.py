@@ -2,14 +2,24 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.schemas import ChatRequest
-from app.services.llm import get_llm
+from app.services.graph import build_graph
 from app.services.sse import encode_done, encode_error, encode_text
 from app.state import Message
 
 router = APIRouter()
+
+
+def _to_langchain_messages(messages: list[Message]) -> list[BaseMessage]:
+    converted: list[BaseMessage] = []
+    for m in messages:
+        if m.role == "user":
+            converted.append(HumanMessage(content=m.content))
+        else:
+            converted.append(AIMessage(content=m.content))
+    return converted
 
 
 @router.post("/chat/stream")
@@ -23,34 +33,23 @@ async def chat_stream(request: Request, body: ChatRequest):
     thread.messages.append(Message(role="user", content=body.message, created_at=now))
     thread.updated_at = now
 
-    # Auto-derive title on first user message
     if len(thread.messages) == 1:
         thread.title = body.message[:60]
 
     async def event_generator():
         try:
-            llm = get_llm()
-
-            # Build message list for the LLM
-            llm_messages = [HumanMessage(content=m.content) for m in thread.messages]
-
-            # Build system message from attached docs
-            system_parts: list[str] = []
-            for doc in thread.attached_docs:
-                system_parts.append(f"--- Context: {doc.filename} ---\n{doc.text}")
-            if system_parts:
-                from langchain_core.messages import SystemMessage
-
-                llm_messages.insert(0, SystemMessage(content="\n\n".join(system_parts)))
+            graph = build_graph()
+            graph_input = {
+                "messages": _to_langchain_messages(thread.messages),
+                "attached_docs": thread.attached_docs,
+            }
 
             chunks: list[str] = []
-            async for chunk in llm.astream(llm_messages):
-                if chunk.content:
-                    text_chunk = str(chunk.content)
-                    chunks.append(text_chunk)
-                    yield encode_text(text_chunk)
+            async for piece in graph.astream(graph_input, stream_mode="custom"):
+                if piece:
+                    chunks.append(piece)
+                    yield encode_text(piece)
 
-            # Append final assistant message
             full_content = "".join(chunks)
             thread.messages.append(
                 Message(

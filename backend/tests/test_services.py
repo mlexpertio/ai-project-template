@@ -1,10 +1,27 @@
+from datetime import datetime, timezone
+from uuid import uuid4
+
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 
 from app.core.config import settings
 from app.services.graph import build_graph
 from app.services.llm import get_llm
 from app.services.sse import encode_done, encode_error, encode_text
+from app.state import Document
+
+
+class _StreamingMockLLM:
+    """Async-streamable stand-in for a chat model."""
+
+    def __init__(self, response: str):
+        self._response = response
+        self.astream_calls: list[list] = []
+
+    async def astream(self, messages):
+        self.astream_calls.append(messages)
+        for word in self._response.split():
+            yield AIMessageChunk(content=word + " ")
 
 
 def test_encode_text():
@@ -48,44 +65,55 @@ class TestLLMFactory:
 
 
 class TestGraph:
-    def test_graph_no_docs(self):
+    @pytest.mark.asyncio
+    async def test_graph_no_docs(self):
         from unittest.mock import patch
 
-        with patch("app.services.graph.get_llm") as mock_get_llm:
-            mock_llm = mock_get_llm.return_value
-            mock_llm.invoke.return_value = AIMessage(content="Hello!")
-
+        mock_llm = _StreamingMockLLM("Hello!")
+        with patch("app.services.graph.get_llm", return_value=mock_llm):
             graph = build_graph()
-            result = graph.invoke(
+            pieces: list[str] = []
+            async for piece in graph.astream(
                 {
                     "messages": [HumanMessage(content="Hi")],
                     "attached_docs": [],
-                }
-            )
+                },
+                stream_mode="custom",
+            ):
+                pieces.append(piece)
 
-        assert len(result["messages"]) == 2
-        assert result["messages"][1].content == "Hello!"
+        assert "".join(pieces) == "Hello! "
+        # No docs means no SystemMessage prepended
+        passed = mock_llm.astream_calls[0]
+        assert not any(isinstance(m, SystemMessage) for m in passed)
 
-    def test_graph_with_docs(self):
+    @pytest.mark.asyncio
+    async def test_graph_with_docs(self):
         from unittest.mock import patch
 
-        with patch("app.services.graph.get_llm") as mock_get_llm:
-            mock_llm = mock_get_llm.return_value
-            mock_llm.invoke.return_value = AIMessage(content="Answer is 42.")
+        doc = Document(
+            id=uuid4(),
+            filename="data.txt",
+            text="The answer is 42.",
+            char_count=17,
+            created_at=datetime.now(timezone.utc),
+        )
 
+        mock_llm = _StreamingMockLLM("Answer is 42.")
+        with patch("app.services.graph.get_llm", return_value=mock_llm):
             graph = build_graph()
-            result = graph.invoke(
+            pieces: list[str] = []
+            async for piece in graph.astream(
                 {
                     "messages": [HumanMessage(content="What is it?")],
-                    "attached_docs": [
-                        {"filename": "data.txt", "text": "The answer is 42."}
-                    ],
-                }
-            )
+                    "attached_docs": [doc],
+                },
+                stream_mode="custom",
+            ):
+                pieces.append(piece)
 
-        # System message should be prepended
-        call_args = mock_llm.invoke.call_args[0][0]
-        assert isinstance(call_args[0], SystemMessage)
-        assert "data.txt" in call_args[0].content
-        assert "The answer is 42." in call_args[0].content
-        assert result["messages"][-1].content == "Answer is 42."
+        passed = mock_llm.astream_calls[0]
+        assert isinstance(passed[0], SystemMessage)
+        assert "data.txt" in passed[0].content
+        assert "The answer is 42." in passed[0].content
+        assert "".join(pieces) == "Answer is 42. "

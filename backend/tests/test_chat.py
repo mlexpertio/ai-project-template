@@ -80,7 +80,7 @@ async def test_chat_stream_happy_path():
     store: AppState = app.state.store
     thread = _make_thread(store)
 
-    with patch("app.routers.chat.get_llm", return_value=_MockLLM("Hi back!")):
+    with patch("app.services.graph.get_llm", return_value=_MockLLM("Hi back!")):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
@@ -105,7 +105,7 @@ async def test_chat_stream_auto_title():
     store: AppState = app.state.store
     thread = _make_thread(store, title=None)
 
-    with patch("app.routers.chat.get_llm", return_value=_MockLLM("Sure!")):
+    with patch("app.services.graph.get_llm", return_value=_MockLLM("Sure!")):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
@@ -134,7 +134,7 @@ async def test_chat_stream_with_attached_docs():
     thread = _make_thread(store)
     thread.attached_docs = [doc]
 
-    with patch("app.routers.chat.get_llm", return_value=_MockLLM("42")):
+    with patch("app.services.graph.get_llm", return_value=_MockLLM("42")):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
@@ -177,7 +177,7 @@ async def test_chat_stream_error_midstream():
         async def ainvoke(self, messages):
             raise RuntimeError("boom")
 
-    with patch("app.routers.chat.get_llm", return_value=_BadLLM()):
+    with patch("app.services.graph.get_llm", return_value=_BadLLM()):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(

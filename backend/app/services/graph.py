@@ -1,34 +1,42 @@
 from typing import TypedDict
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from app.services.llm import get_llm
+from app.state import Document
 
 
 class GraphState(TypedDict):
     messages: list[BaseMessage]
-    attached_docs: list[dict]
+    attached_docs: list[Document]
 
 
-def generate(state: GraphState):
+async def generate(state: GraphState):
     messages = state["messages"]
     docs = state.get("attached_docs", [])
 
     system_parts: list[str] = []
     for doc in docs:
-        system_parts.append(f"--- Context: {doc['filename']} ---\n{doc['text']}")
+        system_parts.append(f"--- Context: {doc.filename} ---\n{doc.text}")
 
     if system_parts:
-        system_msg = SystemMessage(content="\n\n".join(system_parts))
-        llm_messages = [system_msg] + messages
+        llm_messages = [SystemMessage(content="\n\n".join(system_parts))] + messages
     else:
         llm_messages = messages
 
+    writer = get_stream_writer()
     llm = get_llm()
-    response = llm.invoke(llm_messages)
 
-    return {"messages": messages + [response]}
+    full_content = ""
+    async for chunk in llm.astream(llm_messages):
+        piece = str(chunk.content) if chunk.content else ""
+        if piece:
+            writer(piece)
+            full_content += piece
+
+    return {"messages": messages + [AIMessage(content=full_content)]}
 
 
 def build_graph():

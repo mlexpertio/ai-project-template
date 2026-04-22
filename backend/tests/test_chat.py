@@ -4,95 +4,68 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from langchain_core.messages import AIMessageChunk
 
 from app.main import app
-from app.state import AppState, Document, Thread
+from app.state import AppState, Thread
 
 
-@pytest.fixture(autouse=True)
-def clear_store():
-    store: AppState = app.state.store
-    store.documents.clear()
-    store.threads.clear()
-    yield
-    store.documents.clear()
-    store.threads.clear()
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-class _MockLLM:
-    """Fake LLM that returns a predictable response."""
+class _StreamingLLM:
+    """Yields the response word-by-word via astream (the only method the graph uses)."""
 
     def __init__(self, response: str = "Hello there!"):
         self._response = response
 
-    def invoke(self, messages):
-        from langchain_core.messages import AIMessage
-
-        return AIMessage(content=self._response)
-
-    async def ainvoke(self, messages):
-        return self.invoke(messages)
-
-    def stream(self, messages):
-        from langchain_core.messages import AIMessageChunk
-
-        words = self._response.split()
-        for word in words:
+    async def astream(self, messages):
+        for word in self._response.split():
             yield AIMessageChunk(content=word + " ")
 
+
+class _FailingLLM:
+    """Streams one chunk, then raises mid-stream."""
+
     async def astream(self, messages):
-        for chunk in self.stream(messages):
-            yield chunk
+        yield AIMessageChunk(content="Partial")
+        raise RuntimeError("boom")
 
 
-def _make_thread(store: AppState, title: str = "Test") -> Thread:
+def _put_thread(store: AppState, title: str | None = "Test") -> Thread:
     tid = uuid4()
+    now = datetime.now(timezone.utc)
     thread = Thread(
         id=tid,
         title=title,
         attached_docs=[],
         messages=[],
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=now,
+        updated_at=now,
     )
     store.threads[tid] = thread
     return thread
 
 
-def _read_stream(body: bytes) -> list[str]:
-    """Parse Vercel AI SDK data-stream format lines."""
-    lines = body.decode("utf-8").strip().split("\n")
-    texts = []
-    for line in lines:
-        if line.startswith("0:"):
-            texts.append(json.loads(line[2:]))
-    return texts
+def _stream_texts(body: bytes) -> list[str]:
+    """Parse Vercel AI SDK data-stream `0:"..."` frames into their text payloads."""
+    return [
+        json.loads(line[2:])
+        for line in body.decode("utf-8").strip().split("\n")
+        if line.startswith("0:")
+    ]
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_happy_path():
-    store: AppState = app.state.store
-    thread = _make_thread(store)
+async def test_chat_stream_happy_path(client):
+    thread = _put_thread(app.state.store)
 
-    with patch("app.services.graph.get_llm", return_value=_MockLLM("Hi back!")):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                "/api/v1/chat/stream",
-                json={"thread_id": str(thread.id), "message": "Hello"},
-            )
+    with patch("app.services.graph.get_llm", return_value=_StreamingLLM("Hi back!")):
+        response = await client.post(
+            "/api/v1/chat/stream",
+            json={"thread_id": str(thread.id), "message": "Hello"},
+        )
 
     assert response.status_code == 200
-    texts = _read_stream(response.content)
-    assert "".join(texts) == "Hi back! "
+    assert "".join(_stream_texts(response.content)) == "Hi back! "
 
-    # Thread should have user + assistant messages
     assert len(thread.messages) == 2
     assert thread.messages[0].role == "user"
     assert thread.messages[0].content == "Hello"
@@ -101,90 +74,58 @@ async def test_chat_stream_happy_path():
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_auto_title():
-    store: AppState = app.state.store
-    thread = _make_thread(store, title=None)
+async def test_chat_stream_auto_title(client):
+    thread = _put_thread(app.state.store, title=None)
 
-    with patch("app.services.graph.get_llm", return_value=_MockLLM("Sure!")):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                "/api/v1/chat/stream",
-                json={
-                    "thread_id": str(thread.id),
-                    "message": "This is my first question ever",
-                },
-            )
+    with patch("app.services.graph.get_llm", return_value=_StreamingLLM("Sure!")):
+        response = await client.post(
+            "/api/v1/chat/stream",
+            json={
+                "thread_id": str(thread.id),
+                "message": "This is my first question ever",
+            },
+        )
 
     assert response.status_code == 200
     assert thread.title == "This is my first question ever"[:60]
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_with_attached_docs():
+async def test_chat_stream_with_attached_docs(client, make_doc):
     store: AppState = app.state.store
-    doc = Document(
-        id=uuid4(),
-        filename="context.txt",
-        text="The answer is 42.",
-        char_count=19,
-        created_at=datetime.now(timezone.utc),
-    )
-    store.documents[doc.id] = doc
-    thread = _make_thread(store)
+    doc = make_doc(store, "The answer is 42.", filename="context.txt")
+    thread = _put_thread(store)
     thread.attached_docs = [doc]
 
-    with patch("app.services.graph.get_llm", return_value=_MockLLM("42")):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                "/api/v1/chat/stream",
-                json={"thread_id": str(thread.id), "message": "What is the answer?"},
-            )
+    with patch("app.services.graph.get_llm", return_value=_StreamingLLM("42")):
+        response = await client.post(
+            "/api/v1/chat/stream",
+            json={"thread_id": str(thread.id), "message": "What is the answer?"},
+        )
 
     assert response.status_code == 200
-    texts = _read_stream(response.content)
-    assert "".join(texts) == "42 "
+    assert "".join(_stream_texts(response.content)) == "42 "
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_unknown_thread():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/api/v1/chat/stream",
-            json={"thread_id": str(uuid4()), "message": "Hello"},
-        )
+async def test_chat_stream_unknown_thread(client):
+    response = await client.post(
+        "/api/v1/chat/stream",
+        json={"thread_id": str(uuid4()), "message": "Hello"},
+    )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_error_midstream():
-    """If the LLM raises, the endpoint should emit an error event and close cleanly."""
-    store: AppState = app.state.store
-    thread = _make_thread(store)
+async def test_chat_stream_error_midstream(client):
+    """If the LLM raises, the endpoint emits an error frame and closes cleanly."""
+    thread = _put_thread(app.state.store)
 
-    class _BadLLM:
-        async def astream(self, messages):
-            from langchain_core.messages import AIMessageChunk
-
-            yield AIMessageChunk(content="Partial")
-            raise RuntimeError("boom")
-
-        def invoke(self, messages):
-            raise RuntimeError("boom")
-
-        async def ainvoke(self, messages):
-            raise RuntimeError("boom")
-
-    with patch("app.services.graph.get_llm", return_value=_BadLLM()):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post(
-                "/api/v1/chat/stream",
-                json={"thread_id": str(thread.id), "message": "Hello"},
-            )
+    with patch("app.services.graph.get_llm", return_value=_FailingLLM()):
+        response = await client.post(
+            "/api/v1/chat/stream",
+            json={"thread_id": str(thread.id), "message": "Hello"},
+        )
 
     assert response.status_code == 200
-    body = response.content.decode("utf-8")
-    assert "3:" in body  # error line prefix
+    assert "3:" in response.content.decode("utf-8")

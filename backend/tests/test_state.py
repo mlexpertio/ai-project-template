@@ -1,31 +1,27 @@
-import pytest
-from httpx import ASGITransport, AsyncClient
+from copy import deepcopy
+from datetime import datetime, timezone
+from uuid import uuid4
 
-from app.main import app
+import pytest
+
 from app.state import AppState, Document, Thread
 
 
 @pytest.mark.asyncio
-async def test_cors_preflight():
-    """OPTIONS request to /api/v1/documents includes CORS headers."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.options(
-            "/api/v1/documents",
-            headers={
-                "Origin": "http://localhost:3000",
-                "Access-Control-Request-Method": "POST",
-            },
-        )
+async def test_cors_preflight(client):
+    response = await client.options(
+        "/api/v1/documents",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
     assert response.status_code == 200
     assert "access-control-allow-origin" in response.headers
 
 
 class TestDataclasses:
     def test_document_creation(self):
-        from datetime import datetime, timezone
-        from uuid import uuid4
-
         doc = Document(
             id=uuid4(),
             filename="test.txt",
@@ -43,12 +39,7 @@ class TestDataclasses:
         assert s1.threads is not s2.threads
 
     def test_thread_snapshot_independence(self):
-        """Thread creation must copy documents so mutations to the original
-        do not affect the snapshot stored in the thread."""
-        from copy import deepcopy
-        from datetime import datetime, timezone
-        from uuid import uuid4
-
+        """Mutating the source doc must not touch the snapshot held by the thread."""
         doc = Document(
             id=uuid4(),
             filename="original.txt",
@@ -56,7 +47,6 @@ class TestDataclasses:
             char_count=8,
             created_at=datetime.now(timezone.utc),
         )
-        # Simulate the snapshot behaviour expected at thread creation time
         thread = Thread(
             id=uuid4(),
             title="Test",

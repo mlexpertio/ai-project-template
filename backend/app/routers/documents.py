@@ -61,14 +61,9 @@ async def list_documents(request: Request):
 
 
 @router.delete("/documents/{doc_id}", status_code=204)
-async def delete_document(request: Request, doc_id: str):
-    try:
-        doc_uuid = UUID(doc_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Document not found")
-
+async def delete_document(request: Request, doc_id: UUID):
     store = request.app.state.store
-    if doc_uuid not in store.documents:
+    if doc_id not in store.documents:
         raise HTTPException(status_code=404, detail="Document not found")
-    del store.documents[doc_uuid]
+    del store.documents[doc_id]
     return Response(status_code=204)

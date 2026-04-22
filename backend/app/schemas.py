@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class DocumentResponse(BaseModel):
@@ -47,6 +48,21 @@ class ThreadDetailResponse(BaseModel):
     documents: list[ThreadDocumentMeta]
 
 
+class UIMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    role: Literal["user", "assistant", "system"]
+    parts: list[dict[str, Any]]
+
+    def text_content(self) -> str:
+        return "".join(p.get("text", "") for p in self.parts if p.get("type") == "text")
+
+
 class ChatRequest(BaseModel):
-    thread_id: UUID
-    message: str
+    model_config = ConfigDict(extra="ignore")
+
+    id: UUID
+    messages: list[UIMessage]
+    trigger: str | None = None
+    messageId: str | None = None

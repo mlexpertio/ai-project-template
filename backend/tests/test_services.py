@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 from app.config import settings
 from app.services.graph import build_graph
 from app.services.llm import get_llm
-from app.services.sse import encode_done, encode_error, encode_text
+from app.services import sse
 from app.state import Document
 
 
@@ -24,16 +24,35 @@ class _StreamingMockLLM:
             yield AIMessageChunk(content=word + " ")
 
 
-def test_encode_text():
-    assert encode_text("hello") == '0:"hello"\n'
+def test_sse_start():
+    assert sse.start("msg_1") == 'data: {"type":"start","messageId":"msg_1"}\n\n'
 
 
-def test_encode_error():
-    assert encode_error("oops") == '3:"oops"\n'
+def test_sse_text_start():
+    assert sse.text_start("t1") == 'data: {"type":"text-start","id":"t1"}\n\n'
 
 
-def test_encode_done():
-    assert encode_done() == "d\n"
+def test_sse_text_delta():
+    assert (
+        sse.text_delta("t1", "hello")
+        == 'data: {"type":"text-delta","id":"t1","delta":"hello"}\n\n'
+    )
+
+
+def test_sse_text_end():
+    assert sse.text_end("t1") == 'data: {"type":"text-end","id":"t1"}\n\n'
+
+
+def test_sse_finish():
+    assert sse.finish() == 'data: {"type":"finish"}\n\n'
+
+
+def test_sse_error():
+    assert sse.error("oops") == 'data: {"type":"error","errorText":"oops"}\n\n'
+
+
+def test_sse_done():
+    assert sse.done() == "data: [DONE]\n\n"
 
 
 class TestLLMFactory:

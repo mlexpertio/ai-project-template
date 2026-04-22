@@ -44,13 +44,45 @@ def _put_thread(store: AppState, title: str | None = "Test") -> Thread:
     return thread
 
 
+def _sdk_body(thread_id, text: str) -> dict:
+    """Matches the default DefaultChatTransport POST body from AI SDK v5 useChat."""
+    return {
+        "id": str(thread_id),
+        "messages": [
+            {
+                "id": "ui_" + uuid4().hex,
+                "role": "user",
+                "parts": [{"type": "text", "text": text}],
+            }
+        ],
+        "trigger": "submit-message",
+    }
+
+
+def _iter_events(body: bytes):
+    """Parse a text/event-stream body into a list of (type, payload) events."""
+    for line in body.decode("utf-8").split("\n"):
+        if not line.startswith("data: "):
+            continue
+        payload = line[len("data: ") :]
+        if payload == "[DONE]":
+            yield ("__done__", None)
+            continue
+        yield (None, json.loads(payload))
+
+
 def _stream_texts(body: bytes) -> list[str]:
-    """Parse Vercel AI SDK data-stream `0:"..."` frames into their text payloads."""
     return [
-        json.loads(line[2:])
-        for line in body.decode("utf-8").strip().split("\n")
-        if line.startswith("0:")
+        evt.get("delta", "")
+        for kind, evt in _iter_events(body)
+        if kind is None and evt.get("type") == "text-delta"
     ]
+
+
+def _has_error_event(body: bytes) -> bool:
+    return any(
+        kind is None and evt.get("type") == "error" for kind, evt in _iter_events(body)
+    )
 
 
 @pytest.mark.asyncio
@@ -60,10 +92,12 @@ async def test_chat_stream_happy_path(client):
     with patch("app.services.graph.get_llm", return_value=_StreamingLLM("Hi back!")):
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"thread_id": str(thread.id), "message": "Hello"},
+            json=_sdk_body(thread.id, "Hello"),
         )
 
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["x-vercel-ai-ui-message-stream"] == "v1"
     assert "".join(_stream_texts(response.content)) == "Hi back! "
 
     assert len(thread.messages) == 2
@@ -80,10 +114,7 @@ async def test_chat_stream_auto_title(client):
     with patch("app.services.graph.get_llm", return_value=_StreamingLLM("Sure!")):
         response = await client.post(
             "/api/v1/chat/stream",
-            json={
-                "thread_id": str(thread.id),
-                "message": "This is my first question ever",
-            },
+            json=_sdk_body(thread.id, "This is my first question ever"),
         )
 
     assert response.status_code == 200
@@ -100,7 +131,7 @@ async def test_chat_stream_with_attached_docs(client, make_doc):
     with patch("app.services.graph.get_llm", return_value=_StreamingLLM("42")):
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"thread_id": str(thread.id), "message": "What is the answer?"},
+            json=_sdk_body(thread.id, "What is the answer?"),
         )
 
     assert response.status_code == 200
@@ -111,21 +142,39 @@ async def test_chat_stream_with_attached_docs(client, make_doc):
 async def test_chat_stream_unknown_thread(client):
     response = await client.post(
         "/api/v1/chat/stream",
-        json={"thread_id": str(uuid4()), "message": "Hello"},
+        json=_sdk_body(uuid4(), "Hello"),
     )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
+async def test_chat_stream_rejects_non_user_last_message(client):
+    thread = _put_thread(app.state.store)
+    body = {
+        "id": str(thread.id),
+        "messages": [
+            {
+                "id": "ui_" + uuid4().hex,
+                "role": "assistant",
+                "parts": [{"type": "text", "text": "nope"}],
+            }
+        ],
+        "trigger": "submit-message",
+    }
+    response = await client.post("/api/v1/chat/stream", json=body)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_error_midstream(client):
-    """If the LLM raises, the endpoint emits an error frame and closes cleanly."""
+    """If the LLM raises, the endpoint emits an error event and closes cleanly."""
     thread = _put_thread(app.state.store)
 
     with patch("app.services.graph.get_llm", return_value=_FailingLLM()):
         response = await client.post(
             "/api/v1/chat/stream",
-            json={"thread_id": str(thread.id), "message": "Hello"},
+            json=_sdk_body(thread.id, "Hello"),
         )
 
     assert response.status_code == 200
-    assert "3:" in response.content.decode("utf-8")
+    assert _has_error_event(response.content)

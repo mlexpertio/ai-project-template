@@ -1,13 +1,33 @@
 import json
 
 
-def encode_text(delta: str) -> str:
-    return f"0:{json.dumps(delta)}\n"
+def _event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-def encode_error(msg: str) -> str:
-    return f"3:{json.dumps(msg)}\n"
+def start(message_id: str) -> str:
+    return _event({"type": "start", "messageId": message_id})
 
 
-def encode_done() -> str:
-    return "d\n"
+def text_start(part_id: str) -> str:
+    return _event({"type": "text-start", "id": part_id})
+
+
+def text_delta(part_id: str, delta: str) -> str:
+    return _event({"type": "text-delta", "id": part_id, "delta": delta})
+
+
+def text_end(part_id: str) -> str:
+    return _event({"type": "text-end", "id": part_id})
+
+
+def finish() -> str:
+    return _event({"type": "finish"})
+
+
+def error(message: str) -> str:
+    return _event({"type": "error", "errorText": message})
+
+
+def done() -> str:
+    return "data: [DONE]\n\n"

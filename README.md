@@ -43,7 +43,7 @@ Runs at `http://localhost:8000`.
 | GET | `/api/v1/threads` | List threads |
 | GET | `/api/v1/threads/{id}` | Get thread with messages |
 | DELETE | `/api/v1/threads/{id}` | Delete a thread |
-| POST | `/api/v1/chat/stream` | Stream chat response (Vercel AI SDK data-stream format) |
+| POST | `/api/v1/chat/stream` | Stream chat response (AI SDK v5 UI Message Stream; body `{ id, messages, trigger }`) |
 
 See `client.py` for a CLI tool to upload, list, and delete documents:
 

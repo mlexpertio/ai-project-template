@@ -96,10 +96,13 @@ class AppState:
 *   `DELETE /api/v1/threads/{id}` → `204`
 
 **Chat**
-*   `POST /api/v1/chat/stream` — body `{ thread_id, message }`. Appends the user message, invokes the LangGraph workflow with the thread's `messages` and `attached_docs` in state, streams tokens via SSE (Vercel AI SDK format), and appends the final assistant message when the stream closes. On the first user message in a thread, auto-derives `title` from the first 60 chars. Emits a terminal SSE `error` event on mid-stream failures.
+*   `POST /api/v1/chat/stream` — speaks the **AI SDK v5 UI Message Stream** protocol so the frontend is a zero-config `useChat({ id: threadId })`.
+    *   **Request body (default `DefaultChatTransport` shape):** `{ id: UUID, messages: UIMessage[], trigger?, messageId? }`. Each `UIMessage` is `{ id, role, parts }` with a text part `{ type: "text", text: string }`. Server reads `id` → thread lookup, takes `messages[-1]` (must be role `"user"`), concatenates its text parts into the user message, then drives the LangGraph workflow with the thread's persisted `messages` and `attached_docs` in state. The rest of the incoming `messages` array is ignored — the server owns history.
+    *   **Response:** `text/event-stream` with header `x-vercel-ai-ui-message-stream: v1`. Event sequence: `start` → `text-start` → `text-delta`* → `text-end` → `finish` → `[DONE]` (each as `data: {json}\n\n`; terminator is the literal `data: [DONE]\n\n`). On mid-stream failure, emits `{ type: "error", errorText }` then `[DONE]`.
+    *   **Persistence:** appends the user message and, on successful completion, the assistant message to the thread. On the first user message in a thread, auto-derives `title` from the first 60 chars.
 
 **Error codes**
-*   `400` — unknown `document_ids` at thread creation; combined attached text exceeds `MAX_CONTEXT_CHARS`
+*   `400` — unknown `document_ids` at thread creation; combined attached text exceeds `MAX_CONTEXT_CHARS`; `/chat/stream` received a `messages` array whose last entry is not a user message with text content
 *   `404` — thread or document not found
 *   `413` — upload too large
 *   `415` — unsupported MIME
@@ -156,7 +159,8 @@ The sidebar lives in the root layout, shared across routes.
 *   Skipping selection = plain chat, no attached docs.
 
 **3. Chat Interface (`/app/chat/[threadId]/page.tsx`)**
-*   Implements `useChat` from `@ai-sdk/react` pointing to `${NEXT_PUBLIC_API_URL}/api/v1/chat/stream`.
+*   Implements `useChat({ id: threadId })` from `@ai-sdk/react` with the default `DefaultChatTransport` pointed at `${NEXT_PUBLIC_API_URL}/api/v1/chat/stream`. The backend speaks the UI Message Stream protocol natively, so no `prepareSendMessagesRequest` override is needed.
+*   Rehydrate on mount via `GET /api/v1/threads/{id}` → map to `UIMessage[]` and pass as `initialMessages`.
 *   Read-only chips in the header show attached doc filenames (signals the locked context; no remove control).
 *   **Message Renderer:** `react-markdown` with collapsible UI for `<think>...</think>` tags and syntax highlighting via `rehype-highlight`.
 

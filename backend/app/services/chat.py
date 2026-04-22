@@ -1,10 +1,11 @@
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from app.services import sse
 from app.services.graph import build_graph
-from app.services.sse import encode_done, encode_error, encode_text
 from app.state import Message, Thread
 
 
@@ -22,6 +23,12 @@ async def stream_chat(thread: Thread, user_message: str) -> AsyncIterator[str]:
     thread.append_user(user_message, now=datetime.now(timezone.utc))
     thread.ensure_titled_from_first_message()
 
+    message_id = f"msg_{uuid4().hex}"
+    part_id = f"txt_{uuid4().hex}"
+
+    yield sse.start(message_id)
+    yield sse.text_start(part_id)
+
     graph = build_graph()
     graph_input = {
         "messages": _to_langchain_messages(thread.messages),
@@ -33,10 +40,12 @@ async def stream_chat(thread: Thread, user_message: str) -> AsyncIterator[str]:
         async for piece in graph.astream(graph_input, stream_mode="custom"):
             if piece:
                 chunks.append(piece)
-                yield encode_text(piece)
+                yield sse.text_delta(part_id, piece)
 
+        yield sse.text_end(part_id)
         thread.append_assistant("".join(chunks), now=datetime.now(timezone.utc))
-        yield encode_done()
+        yield sse.finish()
+        yield sse.done()
     except Exception as exc:
-        yield encode_error(str(exc))
-        yield encode_done()
+        yield sse.error(str(exc))
+        yield sse.done()

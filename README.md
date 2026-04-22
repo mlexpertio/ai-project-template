@@ -110,8 +110,7 @@ The backend exposes an OpenAPI schema at `http://localhost:8000/openapi.json`. T
 │   │   ├── main.py           # FastAPI app, CORS, router mounts
 │   │   ├── schemas.py        # Pydantic request/response models
 │   │   ├── state.py          # In-memory dataclasses (Document, Thread, etc.)
-│   │   ├── core/
-│   │   │   └── config.py     # Env-driven settings
+│   │   ├── config.py         # Env-driven settings
 │   │   ├── routers/
 │   │   │   ├── health.py     # GET /healthz
 │   │   │   ├── documents.py  # Upload, list, delete documents
@@ -121,6 +120,7 @@ The backend exposes an OpenAPI schema at `http://localhost:8000/openapi.json`. T
 │   │       ├── parse.py      # Text extraction (txt/md/pdf)
 │   │       ├── llm.py        # get_llm() provider factory
 │   │       ├── graph.py      # LangGraph single-node workflow
+│   │       ├── chat.py       # stream_chat orchestration
 │   │       └── sse.py        # Vercel AI SDK data-stream encoder
 │   └── tests/                # pytest (asyncio_mode = "auto")
 └── frontend/

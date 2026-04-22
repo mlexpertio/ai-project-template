@@ -66,6 +66,8 @@ class AppState:
 
 **Attached documents are snapshotted into the thread at creation.** Deleting a document from the global pool afterwards does not affect existing threads — "locked at the start" really means locked.
 
+`Thread.create()` enforces `MAX_CONTEXT_CHARS` and raises `ContextLimitExceeded`; routers surface that as HTTP 400.
+
 ---
 
 ## 4. Backend Architecture (FastAPI)
@@ -126,6 +128,7 @@ backend/app/
     llm.py           # get_llm() provider factory
     parse.py         # extract_text() for txt/md/pdf via pypdf
     graph.py         # LangGraph build
+    chat.py          # stream_chat orchestration (Thread mutation + graph + SSE framing)
     sse.py           # Vercel-AI-SDK-compatible SSE encoder
 ```
 

@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 
-from app.core.config import settings
+from app.config import settings
 from app.services.graph import build_graph
 from app.services.llm import get_llm
 from app.services.sse import encode_done, encode_error, encode_text

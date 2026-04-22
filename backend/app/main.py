@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
+from app.config import settings
 from app.routers import chat, documents, health, threads
 from app.state import AppState
 

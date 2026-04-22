@@ -1,12 +1,10 @@
-import uuid
-from copy import deepcopy
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.responses import Response
 
-from app.core.config import settings
+from app.config import settings
 from app.schemas import (
     ThreadCreateRequest,
     ThreadCreateResponse,
@@ -14,7 +12,7 @@ from app.schemas import (
     ThreadDocumentMeta,
     ThreadListResponse,
 )
-from app.state import Thread
+from app.state import ContextLimitExceeded, Document, Thread
 
 router = APIRouter()
 
@@ -24,36 +22,30 @@ async def create_thread(request: Request, body: ThreadCreateRequest):
     store = request.app.state.store
     doc_ids = body.document_ids or []
 
-    # Validate all IDs exist
+    docs: list[Document] = []
     for doc_id in doc_ids:
-        if doc_id not in store.documents:
+        doc = store.documents.get(doc_id)
+        if doc is None:
             raise HTTPException(status_code=400, detail="Unknown document_ids")
+        docs.append(doc)
 
-    # Snapshot docs and cap combined text
-    attached = [deepcopy(store.documents[doc_id]) for doc_id in doc_ids]
-    total_chars = sum(d.char_count for d in attached)
-    if total_chars > settings.max_context_chars:
-        raise HTTPException(
-            status_code=400, detail="Combined attached text exceeds MAX_CONTEXT_CHARS"
+    try:
+        thread = Thread.create(
+            docs,
+            max_context_chars=settings.max_context_chars,
+            now=datetime.now(timezone.utc),
         )
+    except ContextLimitExceeded as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    tid = uuid.uuid4()
-    now = datetime.now(timezone.utc)
-    thread = Thread(
-        id=tid,
-        title=None,
-        attached_docs=attached,
-        messages=[],
-        created_at=now,
-        updated_at=now,
-    )
-    store.threads[tid] = thread
+    store.threads[thread.id] = thread
 
     return {
-        "id": tid,
-        "created_at": now,
+        "id": thread.id,
+        "created_at": thread.created_at,
         "documents": [
-            ThreadDocumentMeta(id=d.id, filename=d.filename) for d in attached
+            ThreadDocumentMeta(id=d.id, filename=d.filename)
+            for d in thread.attached_docs
         ],
     }
 

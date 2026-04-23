@@ -5,7 +5,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from app.services import sse
-from app.services.graph import build_graph
+from app.services.graph import compiled_graph
 from app.state import Message, Thread
 
 
@@ -29,7 +29,7 @@ async def stream_chat(thread: Thread, user_message: str) -> AsyncIterator[str]:
     yield sse.start(message_id)
     yield sse.text_start(part_id)
 
-    graph = build_graph()
+    graph = compiled_graph
     graph_input = {
         "messages": _to_langchain_messages(thread.messages),
         "attached_docs": thread.attached_docs,

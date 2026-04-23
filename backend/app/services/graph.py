@@ -38,9 +38,12 @@ async def generate(state: GraphState):
     return {"messages": messages + [AIMessage(content=full_content)]}
 
 
-def build_graph():
+def _build_graph():
     graph = StateGraph(GraphState)
     graph.add_node("generate", generate)
     graph.add_edge(START, "generate")
     graph.add_edge("generate", END)
     return graph.compile()
+
+
+compiled_graph = _build_graph()

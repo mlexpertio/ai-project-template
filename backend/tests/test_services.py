@@ -5,7 +5,7 @@ import pytest
 from langchain_core.messages import AIMessageChunk, HumanMessage, SystemMessage
 
 from app.config import settings
-from app.services.graph import build_graph
+from app.services.graph import compiled_graph
 from app.services.llm import get_llm
 from app.services import sse
 from app.state import Document
@@ -90,9 +90,8 @@ class TestGraph:
 
         mock_llm = _StreamingMockLLM("Hello!")
         with patch("app.services.graph.get_llm", return_value=mock_llm):
-            graph = build_graph()
             pieces: list[str] = []
-            async for piece in graph.astream(
+            async for piece in compiled_graph.astream(
                 {
                     "messages": [HumanMessage(content="Hi")],
                     "attached_docs": [],
@@ -121,9 +120,8 @@ class TestGraph:
 
         mock_llm = _StreamingMockLLM("Answer is 42.")
         with patch("app.services.graph.get_llm", return_value=mock_llm):
-            graph = build_graph()
             pieces: list[str] = []
-            async for piece in graph.astream(
+            async for piece in compiled_graph.astream(
                 {
                     "messages": [HumanMessage(content="What is it?")],
                     "attached_docs": [doc],

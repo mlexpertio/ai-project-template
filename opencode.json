@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "unsloth/Qwen3.6-27B-GGUF:Q4_K_M",
+  "model": "deepseek/deepseek-v4-pro",
   "small_model": "openai/gpt-oss-20b:free",
   "provider": {
     "llama.cpp": {
@@ -38,7 +38,17 @@
             }
           }
         },
-        "openai/gpt-oss-20b:free": {}
+        "openai/gpt-oss-20b:free": {},
+        "deepseek/deepseek-v4-pro": {
+          "options": {
+            "provider": {
+              "order": [
+                "deepseek"
+              ],
+              "allow_fallbacks": false
+            }
+          }
+        }
       }
     }
   }

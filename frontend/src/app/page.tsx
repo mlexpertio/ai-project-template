@@ -83,7 +83,7 @@ function HomePageContent() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
             Start a conversation
           </h1>
-          <p className="mt-2 text-[15px] text-foreground/75">
+          <p className="mt-2 text-[16px] leading-7 text-foreground/80">
             Optionally attach documents as locked context.
           </p>
         </div>

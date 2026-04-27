@@ -180,7 +180,7 @@ export default function DocumentsPage() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-baseline gap-3 border-b border-border/60 px-6 py-4">
-        <h1 className="text-[16px] font-semibold tracking-tight text-foreground">
+        <h1 className="text-[17px] font-semibold tracking-tight text-foreground">
           Documents
         </h1>
         <span className="font-mono text-[12px] text-muted-foreground">

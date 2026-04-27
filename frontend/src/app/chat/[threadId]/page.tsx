@@ -51,7 +51,7 @@ function ChatHeader({
 }) {
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-border/60 px-6 py-4">
-      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
+      <h1 className="truncate text-[17px] font-semibold tracking-tight text-foreground">
         {title}
       </h1>
       {documents.length > 0 && (
@@ -95,8 +95,8 @@ function StreamingDots() {
 function UserMessage({ content }: { content: string }) {
   return (
     <div className="flex justify-end animate-fade-up">
-      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-muted/50 px-4 py-2.5">
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-foreground">
+      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-muted/50 px-4 py-3">
+        <p className="whitespace-pre-wrap break-words text-[16px] leading-7 text-foreground">
           {content}
         </p>
       </div>
@@ -119,7 +119,7 @@ function AssistantMessage({
           assistant
         </span>
       </div>
-      <div className="text-[15px] leading-relaxed text-foreground/90">
+      <div className="text-[16px] leading-7 text-foreground">
         {loading && !content ? (
           <StreamingDots />
         ) : (
@@ -168,7 +168,7 @@ function ChatComposer({
             placeholder="Send a message…"
             disabled={disabled}
             rows={1}
-            className="flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50 [field-sizing:content] max-h-48 min-h-6"
+            className="flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50 [field-sizing:content] max-h-48 min-h-6"
           />
           <button
             type="submit"

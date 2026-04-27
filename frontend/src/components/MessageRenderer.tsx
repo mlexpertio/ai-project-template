@@ -11,7 +11,7 @@ interface Props {
 }
 
 const markdownClasses =
-  "leading-relaxed space-y-3 [&_p]:my-0 [&_strong]:font-semibold [&_strong]:text-foreground " +
+  "leading-7 space-y-4 [&_p]:my-0 [&_strong]:font-semibold [&_strong]:text-foreground " +
   "[&_a]:text-accent-cyan [&_a]:underline [&_a]:decoration-accent-cyan/30 [&_a]:underline-offset-4 hover:[&_a]:decoration-accent-cyan " +
   "[&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 " +
   "[&_li::marker]:text-muted-foreground/50 " +
@@ -82,7 +82,7 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
           )}
         </button>
       </div>
-      <div className="overflow-x-auto p-3.5 text-[13px] leading-relaxed">
+      <div className="overflow-x-auto p-4 text-[14px] leading-relaxed">
         <code ref={codeEl} className={`${className || ""} !bg-transparent`}>
           {children}
         </code>

@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Plus, MessageSquare, FileText, Terminal } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
+import { Plus, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ThreadListItem } from "@/lib/types"
 
@@ -55,102 +52,95 @@ export function Sidebar() {
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   )
 
+  const docsActive = pathname.startsWith("/documents")
+
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="flex items-center gap-2 px-3 pt-4 pb-3">
-        <Terminal className="size-3.5 text-cyan-accent" />
-        <span
-          className="text-sm font-semibold tracking-wider text-sidebar-foreground"
-          style={{ fontFamily: "var(--font-syne)" }}
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      <div className="flex items-center justify-between px-3 pt-4 pb-2">
+        <Link
+          href="/"
+          className="flex items-baseline gap-1.5 font-mono text-[13px] tracking-tight text-foreground"
         >
-          MLExpert
-        </span>
-        <div className="ml-auto">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => router.push("/?new=1")}
-            title="New Chat"
-            className="text-sidebar-foreground/50 hover:text-cyan-accent hover:bg-sidebar-accent"
-          >
-            <Plus className="size-3.5" />
-          </Button>
-        </div>
+          <span className="text-accent-cyan">~/</span>
+          <span className="font-medium">mlexpert</span>
+        </Link>
       </div>
-      <Separator className="bg-sidebar-border/50" />
-      <ScrollArea className="flex-1">
-        <div className="p-1.5">
-          {error && (
-            <p className="px-2.5 py-6 text-[11px] text-muted-foreground text-center tracking-wide">
-              ── connection error ──
-            </p>
-          )}
-          {!error && sorted.length === 0 && (
-            <p className="px-2.5 py-6 text-[11px] text-muted-foreground text-center tracking-wide">
-              ── no threads ──
-            </p>
-          )}
-          {sorted.map((t) => {
-            const active = pathname === `/chat/${t.id}`
-            return (
-              <Link
-                key={t.id}
-                href={`/chat/${t.id}`}
+
+      <div className="px-2 pt-2 pb-1">
+        <button
+          type="button"
+          onClick={() => router.push("/?new=1")}
+          className="group flex w-full items-center gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-2 text-[13px] font-mono text-muted-foreground transition-colors hover:border-accent-cyan/40 hover:bg-accent-cyan/5 hover:text-foreground"
+        >
+          <Plus className="size-4 text-muted-foreground transition-colors group-hover:text-accent-cyan" />
+          <span>new chat</span>
+        </button>
+      </div>
+
+      <div className="px-3 pt-3 pb-1">
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+          threads
+        </span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-1.5 pb-2">
+        {error && (
+          <p className="px-3 py-4 font-mono text-[11px] text-destructive/80">
+            {"// connection error"}
+          </p>
+        )}
+        {!error && sorted.length === 0 && (
+          <p className="px-3 py-4 font-mono text-[11px] text-muted-foreground/80">
+            {"// no threads yet"}
+          </p>
+        )}
+        {sorted.map((t) => {
+          const active = pathname === `/chat/${t.id}`
+          return (
+            <Link
+              key={t.id}
+              href={`/chat/${t.id}`}
+              className={cn(
+                "group flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+                active
+                  ? "bg-sidebar-accent text-foreground"
+                  : "text-foreground/80 hover:bg-sidebar-accent/60 hover:text-foreground"
+              )}
+            >
+              <span
                 className={cn(
-                  "group relative flex items-center gap-2 rounded-sm px-2.5 py-2 text-[13px] transition-all duration-150",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/90"
+                  "size-1.5 shrink-0 rounded-full transition-colors",
+                  active ? "bg-accent-cyan" : "bg-muted-foreground/50"
                 )}
-              >
-                {active && (
-                  <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-cyan-accent" />
-                )}
-                <MessageSquare
-                  className={cn(
-                    "size-3 shrink-0",
-                    active ? "text-cyan-accent" : "opacity-40"
-                  )}
-                />
-                <span className="truncate font-body text-[12px] tracking-tight">
-                  {t.title || "new chat"}
-                </span>
-                <span
-                  className={cn(
-                    "ml-auto shrink-0 text-[10px] tracking-wider",
-                    active
-                      ? "text-sidebar-foreground/40"
-                      : "text-sidebar-foreground/30"
-                  )}
-                >
-                  {relativeTime(t.updated_at)}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-      </ScrollArea>
-      <div className="p-1.5">
-        <Separator className="bg-sidebar-border/50 mb-1" />
+              />
+              <span className="truncate">
+                {t.title || "untitled"}
+              </span>
+              <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
+                {relativeTime(t.updated_at)}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+
+      <div className="border-t border-sidebar-border/60 p-1.5">
         <Link
           href="/documents"
           className={cn(
-            "group relative flex items-center gap-2 rounded-sm px-2.5 py-2 text-[13px] transition-all duration-150",
-            pathname.startsWith("/documents")
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground/90"
+            "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+            docsActive
+              ? "bg-sidebar-accent text-foreground"
+              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
           )}
         >
-          {pathname.startsWith("/documents") && (
-            <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-cyan-accent" />
-          )}
           <FileText
             className={cn(
-              "size-3 shrink-0",
-              pathname.startsWith("/documents") ? "text-cyan-accent" : "opacity-40"
+              "size-3.5 shrink-0",
+              docsActive ? "text-accent-cyan" : "opacity-60"
             )}
           />
-          <span className="font-body text-[12px] tracking-tight">documents</span>
+          <span>documents</span>
         </Link>
       </div>
     </aside>

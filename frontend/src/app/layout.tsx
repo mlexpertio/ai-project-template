@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import { Syne, DM_Mono, IBM_Plex_Sans } from "next/font/google";
+import { JetBrains_Mono, IBM_Plex_Sans } from "next/font/google";
 import { Sidebar } from "@/components/Sidebar";
 import "./globals.css";
 
-const syne = Syne({
-  variable: "--font-syne",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono-app",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const dmMono = DM_Mono({
-  variable: "--font-dm-mono",
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["400", "500", "600"],
 });
 
 const ibmPlexSans = IBM_Plex_Sans({
-  variable: "--font-message",
+  variable: "--font-sans-app",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
 });
@@ -34,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${syne.variable} ${dmMono.variable} ${ibmPlexSans.variable} h-full antialiased dark`}
+      className={`${jetbrainsMono.variable} ${ibmPlexSans.variable} h-full antialiased dark`}
     >
       <body className="flex h-full flex-row">
         <Sidebar />

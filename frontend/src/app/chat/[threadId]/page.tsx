@@ -1,14 +1,202 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
-import { Paperclip, Terminal, SendHorizonal, Bot, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Paperclip, ArrowUp, Loader2 } from "lucide-react"
 import { MessageRenderer } from "@/components/MessageRenderer"
 import { apiFetch } from "@/lib/api"
-import type { ThreadDetail } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import type { ThreadDetail, ThreadDocMeta } from "@/lib/types"
+
+type DisplayMessage = {
+  id: string
+  role: "user" | "assistant"
+  content: string
+}
+
+function getMessageText(message: {
+  parts?: Array<{ type: string; text?: string }>
+  content?: string
+}) {
+  const textParts = message.parts?.filter((part) => part.type === "text") ?? []
+  if (textParts.length > 0) {
+    return textParts.map((part) => part.text ?? "").join("")
+  }
+  return message.content ?? ""
+}
+
+function buildThreadTitle(thread: ThreadDetail | null, messages: DisplayMessage[]) {
+  const firstUserText =
+    messages.find((message) => message.role === "user")?.content.trim() || ""
+
+  return thread?.title || firstUserText.slice(0, 60) || "new chat"
+}
+
+function LoadingState() {
+  return (
+    <div className="flex flex-1 items-center justify-center">
+      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+
+function ChatHeader({
+  title,
+  documents,
+}: {
+  title: string
+  documents: ThreadDocMeta[]
+}) {
+  return (
+    <header className="flex shrink-0 items-center gap-3 border-b border-border/60 px-6 py-4">
+      <h1 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
+        {title}
+      </h1>
+      {documents.length > 0 && (
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+          {documents.map((doc) => (
+            <span
+              key={doc.id}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded border border-border bg-muted/40 px-2 py-0.5 font-mono text-[11px] text-foreground/85"
+              title={doc.filename}
+            >
+              <Paperclip className="size-3 text-muted-foreground" />
+              {doc.filename}
+            </span>
+          ))}
+        </div>
+      )}
+    </header>
+  )
+}
+
+function EmptyThreadState() {
+  return (
+    <div className="flex flex-1 items-center justify-center py-24 animate-fade-in">
+      <p className="font-mono text-[13px] text-muted-foreground">
+        {"// type a message below to begin"}
+      </p>
+    </div>
+  )
+}
+
+function StreamingDots() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
+    </span>
+  )
+}
+
+function UserMessage({ content }: { content: string }) {
+  return (
+    <div className="flex justify-end animate-fade-up">
+      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-muted/50 px-4 py-2.5">
+        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-foreground">
+          {content}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function AssistantMessage({
+  content,
+  loading,
+}: {
+  content: string
+  loading: boolean
+}) {
+  return (
+    <div className="animate-fade-up">
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="size-1.5 rounded-full bg-accent-cyan" />
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          assistant
+        </span>
+      </div>
+      <div className="text-[15px] leading-relaxed text-foreground/90">
+        {loading && !content ? (
+          <StreamingDots />
+        ) : (
+          <MessageRenderer content={content} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ChatComposer({
+  value,
+  disabled,
+  onChange,
+  onSubmit,
+}: {
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+  onSubmit: () => void
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      onSubmit()
+    }
+  }
+
+  return (
+    <div className="shrink-0 px-6 pb-5 pt-2">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSubmit()
+        }}
+        className="mx-auto max-w-3xl"
+      >
+        <div className="flex items-end gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 transition-all focus-within:border-accent-cyan/50 focus-within:bg-card focus-within:shadow-[0_0_0_3px_oklch(0.62_0.16_220/0.08)]">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Send a message…"
+            disabled={disabled}
+            rows={1}
+            className="flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50 [field-sizing:content] max-h-48 min-h-6"
+          />
+          <button
+            type="submit"
+            disabled={!value.trim() || disabled}
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-md transition-all",
+              value.trim() && !disabled
+                ? "bg-accent-cyan text-background hover:bg-accent-cyan/90"
+                : "bg-muted/60 text-muted-foreground"
+            )}
+            aria-label="Send"
+          >
+            {disabled ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <ArrowUp className="size-3.5" />
+            )}
+          </button>
+        </div>
+        <p className="mt-2 px-1 font-mono text-[11px] text-muted-foreground">
+          <kbd className="rounded border border-border bg-muted/50 px-1.5 py-0.5 text-foreground/90">Enter</kbd> to send ·{" "}
+          <kbd className="rounded border border-border bg-muted/50 px-1.5 py-0.5 text-foreground/90">Shift</kbd>+
+          <kbd className="rounded border border-border bg-muted/50 px-1.5 py-0.5 text-foreground/90">Enter</kbd> for newline
+        </p>
+      </form>
+    </div>
+  )
+}
 
 export default function ChatPage() {
   const { threadId } = useParams<{ threadId: string }>()
@@ -17,7 +205,6 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true)
   const [inputValue, setInputValue] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     apiFetch<ThreadDetail>(`/api/v1/threads/${threadId}`)
@@ -58,208 +245,87 @@ export default function ChatPage() {
     }
   }, [messages])
 
-  const handleSend = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault()
-      const text = inputValue.trim()
-      if (!text || status === "streaming") return
-      sendMessage({ text })
-      setInputValue("")
-    },
-    [inputValue, status, sendMessage]
+  const handleSubmit = useCallback(() => {
+    const text = inputValue.trim()
+    if (!text || status === "streaming") return
+    sendMessage({ text })
+    setInputValue("")
+  }, [inputValue, status, sendMessage])
+
+  const initialMessages = useMemo<DisplayMessage[]>(
+    () =>
+      thread?.messages.map((message, index) => ({
+        id: `${thread.id}-${index}`,
+        role: message.role as "user" | "assistant",
+        content: message.content,
+      })) ?? [],
+    [thread]
   )
 
-  const initialMessages = thread
-    ? thread.messages.map((m) => ({
-        id: crypto.randomUUID(),
-        role: m.role as "user" | "assistant",
-        content: m.content,
-        parts: [{ type: "text" as const, text: m.content }],
-      }))
-    : []
+  const liveMessages = useMemo<DisplayMessage[]>(
+    () =>
+      messages.map((message) => ({
+        id: message.id,
+        role: message.role as "user" | "assistant",
+        content: getMessageText(message),
+      })),
+    [messages]
+  )
 
   const displayMessages =
-    messages.length === 0 && initialMessages.length > 0
-      ? initialMessages
-      : messages
-
-  const firstUserMessage = displayMessages.find((m) => m.role === "user")
-  const firstUserText =
-    firstUserMessage?.parts
-      ?.filter((p) => p.type === "text")
-      .map((p) => p.text)
-      .join("")
-      .trim() || ""
-  const displayTitle = thread?.title || firstUserText.slice(0, 60) || "new chat"
+    liveMessages.length > 0 ? liveMessages : initialMessages
+  const displayTitle = buildThreadTitle(thread, displayMessages)
 
   if (loading || (thread && thread.id !== threadId)) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="size-4 rounded-full border border-cyan-accent/30 border-t-cyan-accent animate-spin" />
-          <span className="text-[11px] text-muted-foreground tracking-widest font-body">
-            RESTORING THREAD
-          </span>
-        </div>
-      </div>
-    )
+    return <LoadingState />
   }
 
   if (error && !thread) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-[13px] text-destructive font-body">{error}</p>
+      <div className="flex flex-1 items-center justify-center px-6">
+        <p className="font-mono text-[12px] text-destructive">! {error}</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-2.5">
-        <Terminal className="size-3.5 text-cyan-accent/60" />
-        <h1
-          className="truncate text-[13px] font-semibold tracking-tight text-foreground/90"
-          style={{ fontFamily: "var(--font-syne)" }}
-        >
-          {displayTitle}
-        </h1>
-        {thread?.documents.map((doc) => (
-          <span
-            key={doc.id}
-            className="inline-flex items-center gap-1 rounded-sm border border-amber-accent/15 bg-amber-accent/5 px-2 py-0.5 text-[10px] text-amber-accent/80 font-body tracking-tight"
-          >
-            <Paperclip className="size-2.5" />
-            {doc.filename}
-          </span>
-        ))}
-      </div>
+      <ChatHeader title={displayTitle} documents={thread?.documents ?? []} />
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-6 scroll-smooth">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-          {displayMessages.length === 0 && (
-            <div className="flex items-center justify-center py-24 animate-fade-in">
-              <div className="text-center">
-                <Terminal className="mx-auto mb-3 size-6 text-muted-foreground/20" />
-                <p className="text-[13px] text-muted-foreground/50 font-body tracking-tight">
-                  ── send a message to begin ──
-                </p>
-              </div>
-            </div>
-          )}
-          {displayMessages.map((m, idx) => {
-            const isUser = m.role === "user"
-            const textParts = m.parts?.filter(
-              (p) => p.type === "text"
-            ) ?? []
-            const content =
-              textParts.length > 0
-                ? textParts.map((p) => p.text).join("")
-                : ""
-
-            const isLoading =
-              !isUser &&
-              !content &&
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-smooth">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-6">
+          {displayMessages.length === 0 && <EmptyThreadState />}
+          {displayMessages.map((message, index) => {
+            const isLast = index === displayMessages.length - 1
+            const isStreamingThis =
+              message.role === "assistant" &&
               status === "streaming" &&
-              m.id === displayMessages[displayMessages.length - 1]?.id
+              isLast
 
-            return (
-              <div
-                key={m.id}
-                className="animate-fade-up group"
-                style={{ animationDelay: `${idx * 30}ms` }}
-              >
-                <div
-                  className={`flex w-full items-start gap-3 ${
-                    isUser ? "flex-row-reverse justify-start" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`flex size-7 shrink-0 items-center justify-center rounded-sm ${
-                      isUser
-                        ? "bg-amber-accent/10 border border-amber-accent/15"
-                        : "bg-cyan-accent/10 border border-cyan-accent/15"
-                    }`}
-                  >
-                    {isUser ? (
-                      <User className="size-3 text-amber-accent/70" />
-                    ) : (
-                      <Bot className="size-3 text-cyan-accent/70" />
-                    )}
-                  </div>
-                  <div
-                    className={`flex min-w-0 ${
-                      isUser ? "w-full max-w-[720px]" : "w-full max-w-[820px]"
-                    } flex-col ${
-                      isUser ? "items-end" : "items-start"
-                    }`}
-                  >
-                    <span
-                      className={`mb-1.5 text-[10px] font-body tracking-wider ${
-                        isUser ? "text-amber-accent/50" : "text-cyan-accent/50"
-                      }`}
-                    >
-                      {isUser ? "you" : "assistant"}
-                    </span>
-                    <div
-                      className={`max-w-full rounded-sm ${
-                        isUser
-                          ? "border border-amber-accent/16 bg-amber-accent/8 px-4 py-3 shadow-[0_12px_40px_oklch(0.02_0.02_260/0.14)]"
-                          : "bg-transparent px-1 py-1"
-                      }`}
-                    >
-                      {isUser ? (
-                        <p className="message-copy whitespace-pre-wrap break-words text-[15px] leading-7 tracking-normal text-foreground/88">
-                          {content}
-                        </p>
-                      ) : isLoading ? (
-                        <div className="flex items-center gap-1.5 py-1">
-                          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-accent/50 [animation-delay:0ms]" />
-                          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-accent/50 [animation-delay:150ms]" />
-                          <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-accent/50 [animation-delay:300ms]" />
-                        </div>
-                      ) : (
-                        <div className="message-copy text-[15px] leading-7 tracking-normal text-foreground/86 [&>*:first-child]:mt-0">
-                          <MessageRenderer content={content} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            return message.role === "user" ? (
+              <UserMessage key={message.id} content={message.content} />
+            ) : (
+              <AssistantMessage
+                key={message.id}
+                content={message.content}
+                loading={isStreamingThis}
+              />
             )
           })}
-          {error && (
-            <div className="mx-auto mt-4 max-w-lg rounded-sm border border-destructive/30 bg-destructive/8 px-3.5 py-2 text-[12px] font-body text-destructive tracking-tight">
-              <span className="opacity-60">!</span> {error}
+          {error && displayMessages.length > 0 && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 font-mono text-[12px] text-destructive animate-fade-in">
+              ! {error}
             </div>
           )}
         </div>
       </div>
 
-      <div className="shrink-0 border-t border-border/60 px-5 py-3">
-        <form onSubmit={handleSend} className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-2 rounded-sm border border-border/60 bg-card/50 px-3 py-0.5 transition-all duration-200 focus-within:border-cyan-accent/30 focus-within:bg-cyan-accent/3 focus-within:shadow-[0_0_12px_oklch(0.6_0.18_225/0.06)]">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="type a message..."
-              disabled={status === "streaming"}
-              className="flex-1 bg-transparent py-2.5 text-[13px] font-body tracking-tight text-foreground/90 outline-none placeholder:text-muted-foreground/40 disabled:opacity-40"
-            />
-            <Button
-              type="submit"
-              disabled={!inputValue.trim() || status === "streaming"}
-              size="icon-xs"
-              variant="ghost"
-              className="size-7 rounded-sm text-muted-foreground/50 hover:text-cyan-accent hover:bg-cyan-accent/8 disabled:opacity-25"
-            >
-              <SendHorizonal className="size-3.5" />
-            </Button>
-          </div>
-        </form>
-      </div>
+      <ChatComposer
+        value={inputValue}
+        disabled={status === "streaming"}
+        onChange={setInputValue}
+        onSubmit={handleSubmit}
+      />
     </div>
   )
 }

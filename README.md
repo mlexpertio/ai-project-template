@@ -7,9 +7,24 @@ ships as a local document-aware chat app that you can run, inspect, and extend:
 upload `.txt`, `.md`, or `.pdf` files, attach them to a thread, and stream
 answers from an LLM provider through a FastAPI backend and Next.js frontend.
 
-The template is intentionally small and classroom-friendly: state is kept in
-memory, documents are parsed on upload, and chat responses stream through the
-Vercel AI SDK message stream format.
+The template is intentionally small and classroom-friendly. It uses just enough
+clean frontend structure, reusable components, typed API boundaries, and
+production-minded UI polish to make the project easy to understand while still
+being a strong starting point for real AI app work. State is kept in memory,
+documents are parsed on upload, and chat responses stream through the Vercel AI
+SDK message stream format.
+
+## What You Get
+
+- A clean Next.js App Router frontend with a designed chat UI, document library,
+  reusable renderer, and lightweight component primitives.
+- A FastAPI backend with document upload, parsing, thread management, and
+  streaming chat endpoints.
+- Swappable LLM provider support for Ollama, OpenAI, and Anthropic.
+- Simple in-memory state so students can understand the full stack before adding
+  persistence, auth, queues, or production infrastructure.
+- Enough good coding practices to extend confidently without hiding the core app
+  behind unnecessary abstractions.
 
 ## Requirements
 

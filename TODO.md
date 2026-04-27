@@ -50,22 +50,22 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 
 ## Frontend — foundation
 
-- [ ] Initialize shadcn/ui (`npx shadcn@latest init`)
-- [ ] Install Lucide Icons
-- [ ] Install Vercel AI SDK (`@ai-sdk/react`)
-- [ ] Install `react-markdown`, `remark-gfm`, `rehype-highlight`
-- [ ] Configure dark mode as default (no toggle)
-- [ ] Root layout with shared Sidebar
+- [x] Initialize shadcn/ui (`npx shadcn@latest init`) — `components.json`, 5 UI components (button, input, checkbox, separator, scroll-area)
+- [x] Install Lucide Icons (`lucide-react`)
+- [x] Install Vercel AI SDK (`@ai-sdk/react`)
+- [x] Install `react-markdown`, `remark-gfm`, `rehype-highlight`
+- [x] Configure dark mode as default (no toggle) — `<html class="dark">` in layout.tsx
+- [x] Root layout with shared Sidebar
 - [ ] `openapi-typescript` codegen wired into `postinstall` / CI, consuming backend `/openapi.json`
 
 ## Frontend — pages & components
 
-- [ ] `Sidebar` — `+ New Chat` button, thread list from `GET /threads` (title + relative timestamp), `Documents` link at bottom
-- [ ] `/documents` page — `<input type="file">`, table (filename / size / date / delete button)
-- [ ] New Chat landing (inline, not modal) — checkbox list of docs from `GET /documents`, `Start Chat` → `POST /threads` → redirect to `/chat/{id}`; empty state links to `/documents`
-- [ ] `/chat/[threadId]` — `useChat` pointing at `${NEXT_PUBLIC_API_URL}/api/v1/chat/stream`; read-only chips in header showing attached doc filenames
-- [ ] Message renderer: `react-markdown` + `remark-gfm` + `rehype-highlight`; collapsible UI for `<think>...</think>` tags
-- [ ] `/` — redirect to most recent thread, or show empty-state new-chat landing if none exist
+- [x] `Sidebar` — `+ New Chat` button, thread list from `GET /threads` (title + relative timestamp), `Documents` link at bottom
+- [x] `/documents` page — `<input type="file">`, table (filename / size / date / delete button)
+- [x] New Chat landing (inline, not modal) — checkbox list of docs from `GET /documents`, `Start Chat` → `POST /threads` → redirect to `/chat/{id}`; empty state links to `/documents`
+- [x] `/chat/[threadId]` — `useChat` pointing at `${NEXT_PUBLIC_API_URL}/api/v1/chat/stream`; read-only chips in header showing attached doc filenames
+- [x] Message renderer: `react-markdown` + `remark-gfm` + `rehype-highlight`; collapsible UI for `<think>...</think>` tags
+- [x] `/` — redirect to most recent thread, or show empty-state new-chat landing if none exist
 
 ## Testing
 
@@ -78,3 +78,28 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 - [ ] Frontend `Dockerfile` — multi-stage, non-root user
 - [ ] `docker-compose.yml` — `frontend` (3000), `backend` (8000), `ollama` (optional `local` profile, port 11434, volume for weights)
 - [ ] GitHub Actions CI — single workflow on PR; parallel jobs: backend (`ruff`, `pytest`) and frontend (`eslint`, `vitest`, `tsc --noEmit`)
+
+---
+
+## Verification Summary (2025-04-27)
+
+| Gate | Result |
+|------|--------|
+| Backend `pytest` | ✅ **41/41 passed** in 0.60s |
+| Backend `ruff check` | ✅ All checks passed |
+| Frontend `tsc --noEmit` | ✅ No errors |
+| Frontend `eslint` | ✅ No errors |
+| Frontend `next build` | ✅ Build succeeded |
+| shadcn/ui init | ✅ 5 components (button, input, checkbox, separator, scroll-area) |
+| Dark mode default | ✅ `<html class="dark">` in layout.tsx |
+| `openapi-typescript` codegen | ❌ Not wired — types are hand-written in `types.ts` |
+| `vitest` + `@playwright/test` | ❌ Not set up |
+| Docker (Dockerfiles + compose) | ❌ None |
+| GitHub Actions CI | ❌ No workflows |
+
+### Remaining Work (priority order)
+
+1. **`openapi-typescript` codegen** — wire into `postinstall` script, regenerate types from `/openapi.json`
+2. **Docker** — `Dockerfile` (backend + frontend), `docker-compose.yml` with optional `ollama` profile
+3. **Frontend unit tests** — `vitest` setup + tests for `apiFetch`, `MessageRenderer`, document helpers
+4. **GitHub Actions CI** — `.github/workflows/ci.yml` with parallel backend/frontend jobs

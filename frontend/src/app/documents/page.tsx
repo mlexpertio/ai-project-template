@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import {
   Trash2,
   Upload,
-  FileText,
   X,
   Loader2,
 } from "lucide-react"
@@ -95,26 +94,67 @@ function UploadDropzone({
         onDragOver={handleDrag}
         onDrop={handleDrop}
         className={cn(
-          "group flex w-full items-center justify-center gap-3 rounded-md border border-dashed text-[14px] transition-colors",
-          compact ? "px-4 py-3" : "px-6 py-12",
+          "group flex w-full flex-col items-center justify-center rounded-lg border border-dashed transition-colors",
+          compact ? "gap-2 px-6 py-8" : "gap-3 px-6 py-16",
           dragging
-            ? "border-accent-cyan/60 bg-accent-cyan/5 text-accent-cyan"
-            : "border-border bg-muted/10 text-foreground/80 hover:border-accent-cyan/40 hover:bg-accent-cyan/3 hover:text-foreground",
+            ? "border-accent-cyan/60 bg-accent-cyan/5"
+            : "border-border bg-muted/10 hover:border-accent-cyan/40 hover:bg-accent-cyan/3",
           uploading && "pointer-events-none opacity-60"
         )}
       >
         {uploading ? (
           <>
-            <Loader2 className="size-4 animate-spin" />
-            <span>uploading…</span>
+            <Loader2
+              className={cn(
+                "animate-spin text-accent-cyan",
+                compact ? "size-5" : "size-7"
+              )}
+            />
+            <span
+              className={cn(
+                "font-medium text-foreground",
+                compact ? "text-[14px]" : "text-[15px]"
+              )}
+            >
+              uploading…
+            </span>
           </>
         ) : (
           <>
-            <Upload className="size-4 text-muted-foreground transition-colors group-hover:text-accent-cyan" />
-            <span>
+            <div
+              className={cn(
+                "flex items-center justify-center rounded-full border border-border bg-background/40 transition-colors",
+                compact ? "size-10" : "size-14",
+                dragging
+                  ? "border-accent-cyan/60 bg-accent-cyan/10"
+                  : "group-hover:border-accent-cyan/40 group-hover:bg-accent-cyan/5"
+              )}
+            >
+              <Upload
+                className={cn(
+                  "transition-colors",
+                  compact ? "size-4" : "size-6",
+                  dragging
+                    ? "text-accent-cyan"
+                    : "text-muted-foreground group-hover:text-accent-cyan"
+                )}
+              />
+            </div>
+            <span
+              className={cn(
+                "font-medium transition-colors",
+                compact ? "text-[14px]" : "text-[15px]",
+                dragging ? "text-accent-cyan" : "text-foreground"
+              )}
+            >
               {dragging ? "release to upload" : "drop file or click to browse"}
             </span>
-            <span className="font-mono text-[12px] text-muted-foreground">
+            <span
+              className={cn(
+                "font-mono text-muted-foreground",
+                compact ? "text-[11px]" : "text-[12px]"
+              )}
+            >
               .txt .md .pdf · 5MB max
             </span>
           </>
@@ -198,13 +238,12 @@ export default function DocumentsPage() {
           )}
 
           {docs.length === 0 ? (
-            <div className="mt-12 animate-fade-up">
+            <div className="mt-8 animate-fade-up">
               <div className="mb-6 text-center">
-                <FileText className="mx-auto mb-3 size-6 text-muted-foreground" />
-                <h2 className="text-base font-semibold tracking-tight text-foreground">
+                <h2 className="text-[18px] font-semibold tracking-tight text-foreground">
                   No documents yet
                 </h2>
-                <p className="mt-1 text-[13px] text-muted-foreground">
+                <p className="mt-1.5 text-[14px] text-muted-foreground">
                   Upload a source file to attach as chat context.
                 </p>
               </div>
@@ -212,7 +251,7 @@ export default function DocumentsPage() {
             </div>
           ) : (
             <>
-              <div className="mb-4">
+              <div className="mb-6">
                 <UploadDropzone
                   onUpload={handleUpload}
                   uploading={uploading}

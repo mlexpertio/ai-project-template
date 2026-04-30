@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowRight, FileText, Loader2 } from "lucide-react"
-import { apiFetch } from "@/lib/api"
+import { apiFetch, API_BASE } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { DocumentItem, ThreadCreateResponse } from "@/lib/types"
 
@@ -23,9 +23,7 @@ function HomePageContent() {
       .then(setDocs)
       .catch((e) => setError(e.message))
 
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/threads`
-    )
+    fetch(`${API_BASE}/api/v1/threads`)
       .then((res) => res.json())
       .then((threads) => {
         setThreadsLoaded(true)

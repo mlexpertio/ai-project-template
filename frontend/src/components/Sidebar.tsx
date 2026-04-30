@@ -5,9 +5,8 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Plus, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { API_BASE } from "@/lib/api"
 import type { ThreadListItem } from "@/lib/types"
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 function relativeTime(dateStr: string): string {
   const now = Date.now()

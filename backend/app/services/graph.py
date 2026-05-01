@@ -29,11 +29,31 @@ async def generate(state: GraphState):
     llm = get_llm()
 
     full_content = ""
+    in_thinking = False
     async for chunk in llm.astream(llm_messages):
-        piece = str(chunk.content) if chunk.content else ""
-        if piece:
-            writer(piece)
-            full_content += piece
+        reasoning = chunk.additional_kwargs.get("reasoning_content")
+        content = str(chunk.content) if chunk.content else ""
+
+        if reasoning:
+            if not in_thinking:
+                in_thinking = True
+                writer("<think>")
+                full_content += "<think>"
+        elif content and in_thinking:
+            in_thinking = False
+            writer("</think>")
+            full_content += "</think>"
+
+        if reasoning:
+            writer(reasoning)
+            full_content += reasoning
+        elif content:
+            writer(content)
+            full_content += content
+
+    if in_thinking:
+        writer("</think>")
+        full_content += "</think>"
 
     return {"messages": messages + [AIMessage(content=full_content)]}
 

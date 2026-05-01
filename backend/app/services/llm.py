@@ -10,6 +10,7 @@ def get_llm():
     kwargs = {}
     if provider == "ollama":
         kwargs["base_url"] = settings.ollama_base_url
+        kwargs["reasoning"] = True
     elif provider == "openai":
         kwargs["api_key"] = settings.openai_api_key
     elif provider == "anthropic":

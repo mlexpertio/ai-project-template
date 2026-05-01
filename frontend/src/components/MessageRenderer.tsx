@@ -100,7 +100,7 @@ function InlineCode({ children }: { children?: React.ReactNode }) {
 }
 
 function ThinkBlock({ content }: { content: string }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [mountTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState("")
 

@@ -14,12 +14,18 @@ from app.state import Document
 class _StreamingMockLLM:
     """Async-streamable stand-in for a chat model."""
 
-    def __init__(self, response: str):
+    def __init__(self, response: str, thinking: str | None = None):
         self._response = response
+        self._thinking = thinking
         self.astream_calls: list[list] = []
 
     async def astream(self, messages):
         self.astream_calls.append(messages)
+        if self._thinking:
+            for word in self._thinking.split():
+                yield AIMessageChunk(
+                    content="", additional_kwargs={"reasoning_content": word + " "}
+                )
         for word in self._response.split():
             yield AIMessageChunk(content=word + " ")
 
@@ -67,6 +73,7 @@ class TestLLMFactory:
         monkeypatch.setattr(settings, "ollama_base_url", "http://ollama:11434")
         llm = get_llm()
         assert llm.model == "llama3.2"
+        assert llm.reasoning is True
 
     def test_openai_provider(self, monkeypatch):
         monkeypatch.setattr(settings, "ai_provider", "openai")
@@ -135,3 +142,25 @@ class TestGraph:
         assert "data.txt" in passed[0].content
         assert "The answer is 42." in passed[0].content
         assert "".join(pieces) == "Answer is 42. "
+
+    @pytest.mark.asyncio
+    async def test_graph_with_thinking(self):
+        from unittest.mock import patch
+
+        mock_llm = _StreamingMockLLM("The answer is 4.", thinking="Let me calculate.")
+        with patch("app.services.graph.get_llm", return_value=mock_llm):
+            pieces: list[str] = []
+            async for piece in compiled_graph.astream(
+                {
+                    "messages": [HumanMessage(content="What is 2+2?")],
+                    "attached_docs": [],
+                },
+                stream_mode="custom",
+            ):
+                pieces.append(piece)
+
+        full = "".join(pieces)
+        assert "<think>" in full
+        assert "Let me calculate." in full
+        assert "</think>" in full
+        assert "The answer is 4." in full

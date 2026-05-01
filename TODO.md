@@ -74,9 +74,9 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 
 ## DX / Infrastructure
 
-- [ ] Backend `Dockerfile` — multi-stage, non-root user
-- [ ] Frontend `Dockerfile` — multi-stage, non-root user
-- [ ] `docker-compose.yml` — `frontend` (3000), `backend` (8000), `ollama` (optional `local` profile, port 11434, volume for weights)
+- [x] Backend `Dockerfile` — multi-stage, non-root user
+- [x] Frontend `Dockerfile` — multi-stage, non-root user
+- [x] `docker-compose.yml` — `frontend` (3000), `backend` (8000)
 - [ ] GitHub Actions CI — single workflow on PR; parallel jobs: backend (`ruff`, `pytest`) and frontend (`eslint`, `vitest`, `tsc --noEmit`)
 
 ---
@@ -94,12 +94,11 @@ Progress tracker for [`PRD.md`](./PRD.md). Tasks follow the PRD's build sequence
 | Dark mode default | ✅ `<html class="dark">` in layout.tsx |
 | `openapi-typescript` codegen | ❌ Not wired — types are hand-written in `types.ts` |
 | `vitest` + `@playwright/test` | ❌ Not set up |
-| Docker (Dockerfiles + compose) | ❌ None |
+| Docker (Dockerfiles + compose) | ✅ `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` |
 | GitHub Actions CI | ❌ No workflows |
 
 ### Remaining Work (priority order)
 
 1. **`openapi-typescript` codegen** — wire into `postinstall` script, regenerate types from `/openapi.json`
-2. **Docker** — `Dockerfile` (backend + frontend), `docker-compose.yml` with optional `ollama` profile
-3. **Frontend unit tests** — `vitest` setup + tests for `apiFetch`, `MessageRenderer`, document helpers
-4. **GitHub Actions CI** — `.github/workflows/ci.yml` with parallel backend/frontend jobs
+2. **Frontend unit tests** — `vitest` setup + tests for `apiFetch`, `MessageRenderer`, document helpers
+3. **GitHub Actions CI** — `.github/workflows/ci.yml` with parallel backend/frontend jobs

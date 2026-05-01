@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+.env.*
+!.env.example
+tests/
+data/
+*.pyc
+*.pyo
+.git
+.DS_Store
+.vscode/

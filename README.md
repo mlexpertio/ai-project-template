@@ -74,6 +74,24 @@ npm --prefix frontend run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Docker Compose
+
+Build and start the frontend and backend containers:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Open [http://localhost:3000](http://localhost:3000). The backend container reaches
+Ollama running on your host machine automatically (`host.docker.internal`).
+
+Stop all containers:
+
+```bash
+docker compose down
+```
+
 ## Environment
 
 The backend reads the root `.env` file.

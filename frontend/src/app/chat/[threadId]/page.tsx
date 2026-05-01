@@ -6,7 +6,7 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { Paperclip, ArrowUp, Loader2 } from "lucide-react"
 import { MessageRenderer } from "@/components/MessageRenderer"
-import { apiFetch } from "@/lib/api"
+import { apiFetch, API_BASE } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import type { ThreadDetail, ThreadDocMeta } from "@/lib/types"
 
@@ -219,7 +219,7 @@ export default function ChatPage() {
   const { messages, status, sendMessage } = useChat({
     id: threadId,
     transport: new DefaultChatTransport({
-      api: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/chat/stream`,
+      api: `${API_BASE}/api/v1/chat/stream`,
     }),
     onError: (e: Error) => setError(e.message),
   })
